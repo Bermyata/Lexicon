@@ -117,10 +117,10 @@ var SG=[],PH=[];DATA.forEach(function(d){(d[1].indexOf(" ")>=0?PH:SG).push(d[0])
 var H=3600e3;
 var INT=[4,12,24,144,288,576,1152,2304,4320].map(function(h){return h*H});
 var STAGE_NAMES=["через 4 ч","через 12 ч","через 1 день","через 6 дней","через 12 дней","через 24 дня","через 48 дней","через 96 дней","через 180 дней"];
-var MAX_LEARN=50,MIN_ACTIVE=5,STREAK=3,T_NEW=10,T_RELAPSE=5,KEY="lexicon.v1";
+var MAX_LEARN=50,MIN_ACTIVE=5,STREAK=3,T_NEW=9,T_RELAPSE=5,KEY="lexicon.v1";
 var S=null,ui={mode:"home"},view=document.getElementById("view");
 
-function pruneStale(words){Object.keys(words).forEach(function(id){if(!BYID.has(Number(id)))delete words[id]})}
+function pruneStale(words){Object.keys(words).forEach(function(id){if(!BYID.has(Number(id)))delete words[id];else if(words[id].s==="L"&&words[id].t===10)words[id].t=T_NEW})}
 function load(){
   try{var r=localStorage.getItem(KEY);if(r)S=JSON.parse(r)}catch(e){}
   if(!S||!S.words)S={words:{},day:"",newToday:0,credits:0};
