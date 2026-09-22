@@ -345,12 +345,12 @@ function answer(correct,given,note){
   var q=ui.q,w=S.words[q.id];q.answered=true;q.correct=correct;q.given=given;q.note=note||"";ui.done++;
   if(correct){
     ui.ok++;w.ok++;
-    if(w.s==="L"){w.c++;w.k=(w.k||0)+1;if(w.k>=STREAK){w.k=0;S.credits++;q.unlocked=true}if(w.c>=w.t){w.s="R";w.st=0;w.due=Date.now()+INT[0];q.grad=true}}
+    if(w.s==="L"){w.c++;w.k=(w.k||0)+1;if(w.k>=STREAK&&!w.u){w.u=1;S.credits++;q.unlocked=true}if(w.c>=w.t){w.s="R";w.st=0;w.due=Date.now()+INT[0];q.grad=true}}
     else{w.st=Math.min(w.st+1,8);w.due=Date.now()+INT[w.st];q.next=INT[w.st]}
   }else{
     ui.bad++;w.bad++;
     if(w.s==="L"){w.c=Math.max(0,w.c-1);w.k=0}
-    else{w.s="L";w.c=0;w.k=0;w.t=T_RELAPSE;w.st=0;w.due=0;q.relapsed=true}
+    else{w.s="L";w.c=0;w.k=0;w.u=0;w.t=T_RELAPSE;w.st=0;w.due=0;q.relapsed=true}
   }
   ui.recent.push(q.id);save();render();
   if(correct)speak(BYID.get(q.id)[1]);
@@ -365,7 +365,7 @@ function renderQuiz(){
   if(q.intro){var di=BYID.get(q.intro);view.innerHTML=top+'<div class="fb info">Открывается новое слово</div><div style="height:12px"></div><div class="panel">'+wordHead(di)+'<div class="label">Перевод</div><div class="ru">'+esc(di[3])+'</div>'+details(di)+'</div><div style="height:12px"></div><button class="btn primary block" data-act="learn-inline">Начать учить</button>';return}
   var d=BYID.get(q.id),w=S.words[q.id],h=top+'<div class="stack">';
   h+='<div class="panel prompt">';
-  h+='<div class="row wrap" style="margin-bottom:10px"><span class="small muted">'+(w.s==="L"?"Изучение · "+w.c+" из "+w.t+" · подряд "+(w.k||0)+" из "+STREAK:"Повторение")+'</span>'+(w.s==="L"?dots(w):"")+'</div>';
+  h+='<div class="row wrap" style="margin-bottom:10px"><span class="small muted">'+(w.s==="L"?"Изучение · "+w.c+" из "+w.t+(w.u?" · новое слово открыто":" · подряд "+(w.k||0)+" из "+STREAK):"Повторение")+'</span>'+(w.s==="L"?dots(w):"")+'</div>';
   if(q.type==="en-ru"){h+='<div class="small muted" style="margin-bottom:6px">Выберите перевод</div>'+wordHead(d)}
   else if(q.type==="ru-en"){h+='<div class="small muted" style="margin-bottom:6px">Выберите английское слово</div><div class="ru" style="font-size:24px">'+esc(d[3])+'</div>'}
   else{h+='<div class="small muted" style="margin-bottom:6px">Напишите по-английски</div><div class="ru" style="font-size:24px">'+esc(d[3])+'</div>'}
