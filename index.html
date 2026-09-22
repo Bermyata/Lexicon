@@ -88,6 +88,11 @@ h3{font-family:var(--font-display);font-size:18px;margin:0}
 textarea.field{padding:10px 12px;min-height:110px;font-size:13px;font-family:ui-monospace,Menlo,monospace}
 .topbar{display:flex;align-items:center;justify-content:space-between;gap:12px;margin-bottom:12px}
 .pill{display:inline-block;padding:2px 10px;border-radius:99px;background:var(--accent-soft);color:var(--accent);font-size:13px;font-weight:600}
+.phon-row{padding:10px 0;border-top:1px solid var(--line)}
+.phon-row:first-child{border-top:0}
+.phon-row .sym{font-family:var(--font-display);font-weight:700;font-size:19px;color:var(--accent)}
+.phon-row .ex{font-size:14px;color:var(--muted);margin-left:8px}
+.phon-row .desc{margin-top:4px;font-size:14px}
 .tick{font-variant-numeric:tabular-nums}
 @media (prefers-reduced-motion:no-preference){.panel,.opt,.fb{animation:rise .18s ease-out}@keyframes rise{from{opacity:.4;transform:translateY(4px)}to{opacity:1;transform:none}}}
 </style>
@@ -99,6 +104,7 @@ textarea.field{padding:10px 12px;min-height:110px;font-size:13px;font-family:ui-
 <nav class="tabs" id="tabs" aria-label="Разделы"><div class="in">
   <button data-tab="home" aria-current="true"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M4 11l8-7 8 7v9a1 1 0 0 1-1 1h-4v-6H9v6H5a1 1 0 0 1-1-1z"/></svg>Сегодня</button>
   <button data-tab="stats"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M5 20V10M12 20V4M19 20v-7"/></svg>Прогресс</button>
+  <button data-tab="ipa"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M21 15a2 2 0 0 1-2 2H7l-4 4V5a2 2 0 0 1 2-2h14a2 2 0 0 1 2 2z"/></svg>Транскрипция</button>
 </div></nav>
 
 <script>
@@ -174,7 +180,7 @@ function adopt(rem){
   S=rem;try{localStorage.setItem(KEY,JSON.stringify(S))}catch(e){}
   var c=chunkData();cloud.last={};Object.keys(c.str).forEach(function(n){cloud.last[n]=c.str[n]});
   cloud.last.meta=metaStr();cloud.count=wordCount(S.words);cloud.state="cloud";cloud.allow=false;
-  if(ui.mode!=="home"&&ui.mode!=="stats")ui={mode:"home"};
+  if(ui.mode!=="home"&&ui.mode!=="stats"&&ui.mode!=="ipa")ui={mode:"home"};
   rollDay();
 }
 /* snapshot = copy of the progress under names b_<key>_<chunk>; the newest MAX_BKS are kept */
@@ -274,39 +280,15 @@ function dots(w){var h='<div class="dots" aria-label="Верных ответо�
 function renderHome(){
   rollDay();
   var L=learning(),due=dueList(),room=newRoom(),R=reviewList();
-  var why="";
-  if(!DATA.length)why="Нет слов.";
-  else if(L.length>=MAX_LEARN)why="В изучении уже "+MAX_LEARN+" слов — сначала доучите их.";
-  else if(!room)why="Новое слово откроется, когда любое слово получит "+STREAK+" верных ответа подряд.";
-  else if(!nextNew(1).length)why="Все слова открыты.";
   var next=null;R.forEach(function(id){var w=S.words[id];if(w.due>Date.now()&&(next===null||w.due<next))next=w.due});
   var h='<div class="stack">'+guardHtml();
-  h+='<div class="panel card-task"><div class="meta"><div><h3>Новые слова</h3><p class="note">'+(why||("Можно открыть новых слов: "+room))+'</p></div><div class="big tick">'+room+'</div></div>';
-  h+='<button class="btn primary block" data-act="intro"'+(room?"":" disabled")+'>Открыть новые слова</button></div>';
   h+='<div class="panel card-task"><div class="meta"><div><h3>В изучении</h3><p class="note">Нужно '+T_NEW+' верных ответов, чтобы слово считалось выученным</p></div><div class="big tick">'+L.length+'<span class="muted" style="font-size:18px">/'+MAX_LEARN+'</span></div></div>';
   h+='<div class="meter"><i style="width:'+(L.length/MAX_LEARN*100)+'%"></i></div>';
-  h+='<button class="btn primary block" data-act="practice"'+(L.length?"":" disabled")+'>Тренировать</button></div>';
+  h+='<button class="btn primary block" data-act="practice"'+(L.length||room?"":" disabled")+'>Учить</button></div>';
   h+='<div class="panel card-task"><div class="meta"><div><h3>Повторение</h3><p class="note">'+(due.length?"Пора повторить, чтобы не забыть":(R.length?(next?"Ближайшее повторение через "+fmtDur(next-Date.now()):""):"Выученные слова появятся здесь"))+'</p></div><div class="big tick">'+due.length+'</div></div>';
   h+='<button class="btn primary block" data-act="review"'+(due.length?"":" disabled")+'>Повторить</button></div>';
   h+='</div>';
   view.innerHTML=h;
-}
-
-/* ---------- intro ---------- */
-function startIntro(){var n=newRoom();if(!n)return;var ids=nextNew(n);if(!ids.length)return;ui={mode:"intro",ids:ids,i:0};render()}
-function renderIntro(){
-  var top='<div class="topbar"><button class="btn ghost" data-act="home">Закрыть</button><span class="pill">'+Math.min(ui.i+1,ui.ids.length)+' из '+ui.ids.length+'</span></div>';
-  if(ui.i>=ui.ids.length){
-    view.innerHTML=top+'<div class="panel stack"><h2>Готово</h2><p class="lead" style="margin:0">Новые слова добавлены в изучение. Потренируйтесь сразу — так они лучше запомнятся.</p><button class="btn primary block" data-act="practice">Тренировать</button><button class="btn block" data-act="home">На главную</button></div>';return;
-  }
-  var d=BYID.get(ui.ids[ui.i]);
-  view.innerHTML=top+'<div class="panel">'+wordHead(d)+'<div class="label">Перевод</div><div class="ru">'+esc(d[3])+'</div>'+details(d)+'</div><div style="height:12px"></div><button class="btn primary block" data-act="learn">Начать учить</button>';
-  window.scrollTo(0,0);
-}
-function learnCurrent(){
-  var id=ui.ids[ui.i];
-  if(!S.words[id]){S.words[id]={s:"L",c:0,k:0,t:T_NEW,st:0,due:0,ok:0,bad:0};if(S.credits>0)S.credits--;save()}
-  ui.i++;render();
 }
 
 /* ---------- quiz ---------- */
@@ -414,7 +396,7 @@ function renderStats(){
   for(var s=0;s<9;s++)h+='<div class="bar"><span class="muted">'+STAGE_NAMES[s].replace("через ","")+'</span><div class="meter"><i style="width:'+(stg[s]/mx*100)+'%"></i></div><b>'+stg[s]+'</b></div>';
   h+='</div></div>';
   h+='<div class="panel"><h3 style="margin-bottom:6px">Сейчас в изучении</h3>';
-  if(!L.length)h+='<p class="muted" style="margin:0">Пока нет слов. Откройте новые на главной.</p>';
+  if(!L.length)h+='<p class="muted" style="margin:0">Пока нет слов. Нажмите «Учить» на главной, чтобы начать.</p>';
   else{h+='<div class="list">';L.forEach(function(id){var d=BYID.get(id),w=S.words[id];h+='<div class="li"><div><b>'+esc(d[1])+'</b><div class="ipa" style="font-size:14px">'+esc(d[2])+'</div><div class="muted small">'+esc(d[3])+'</div></div>'+dots(w)+'</div>'});h+='</div>'}
   h+='</div>';
   h+=bkHtml();
@@ -423,20 +405,76 @@ function renderStats(){
   view.innerHTML=h;
 }
 
+/* ---------- ipa ---------- */
+var IPA=[
+["Гласные",[
+  ["iː","see","/siː/","видеть","Долгий и напряжённый «и»: губы растянуты в улыбку, звук тянется дольше, чем русское «и»."],
+  ["ɪ","sit","/sɪt/","сидеть","Короткий и расслабленный, среднее между «и» и «ы»; короче и менее напряжён, чем iː."],
+  ["e","bed","/bed/","кровать","Похож на русское «э» в слове «этот», но короче и чуть более закрытый."],
+  ["æ","cat","/kæt/","кот","Между «э» и «а»: рот открыт шире, чем для «э», язык внизу."],
+  ["ʌ","cup","/kʌp/","чашка","Краткий центральный звук, похож на быстрое ударное русское «а», но более сжатое."],
+  ["ɑː","car","/kɑːr/","машина","Долгий, глубокий «а» с максимально открытым ртом."],
+  ["ɔː","law","/lɔː/","закон","Долгий округлённый звук, среднее между «о» и «а»; губы округлены."],
+  ["ʊ","book","/bʊk/","книга","Короткий и расслабленный «у», губы округлены слабее, чем для uː."],
+  ["uː","food","/fuːd/","еда","Долгий, губы сильно округлены и вытянуты вперёд, напряжённее русского «у»."],
+  ["ə","about","/əˈbaʊt/","около","«Шва» — нейтральный, очень короткий и невнятный звук; встречается только без ударения."]
+]],
+["Дифтонги",[
+  ["eɪ","day","/deɪ/","день","Скольжение от «э» к «и»: «эй», произносится слитно, как один звук."],
+  ["aɪ","my","/maɪ/","мой","Скольжение от «а» к «и»: «ай», слитно."],
+  ["ɔɪ","boy","/bɔɪ/","мальчик","Скольжение от «о» к «и»: «ой», слитно."],
+  ["aʊ","how","/haʊ/","как","Скольжение от «а» к «у»: «ау», слитно."],
+  ["oʊ","go","/ɡoʊ/","идти","Начинается с округлённого «о» и плавно уходит в «у»."]
+]],
+["Гласные с «р» (типично для американского произношения)",[
+  ["ɜːr","bird","/bɜːrd/","птица","Долгий гласный с окраской «р»: язык слегка загнут назад, звук похож на протяжное «ёр»."],
+  ["ər","teacher","/ˈtiːtʃər/","учитель","Безударный вариант ɜːr — короткий, невнятный «эр» в конце слов."],
+  ["ɑːr","car","/kɑːr/","машина","«А» с р-окраской: язык загибается назад в конце звука, взрывного «р» как в русском нет."],
+  ["ɔːr","more","/mɔːr/","больше","Округлённое «о» с р-окраской, язык загибается назад в конце."],
+  ["ɪr","near","/nɪr/","около","«И» плавно переходит в р-окраску."],
+  ["er","care","/ker/","заботиться","«Э» плавно переходит в р-окраску."],
+  ["ʊr","tour","/tʊr/","тур","«У» плавно переходит в р-окраску."]
+]],
+["Согласные без аналога в русском или те, что часто путают",[
+  ["θ","think","/θɪŋk/","думать","Глухой межзубный: кончик языка между зубами, воздух проходит со свистом. Не «с» и не «ф»."],
+  ["ð","this","/ðɪs/","этот","Звонкая пара θ: язык между зубами, но с голосом. Не «з» и не «д»."],
+  ["ŋ","sing","/sɪŋ/","петь","Заднеязычный носовой звук, как «н» перед «г» в слове «банк», без самого «г»."],
+  ["w","we","/wiː/","мы","Губы округляются и вытягиваются вперёд, как перед русским «у», затем сразу раскрываются в гласный."],
+  ["h","hat","/hæt/","шляпа","Лёгкий выдох без участия голосовых связок, слабее русского «х»."],
+  ["r","red","/red/","красный","Язык загнут назад, не касается нёба и не дрожит — совсем не похоже на русское «р»."],
+  ["j","yes","/jes/","да","Как русское «й» перед гласным."],
+  ["ʃ","she","/ʃiː/","она","Как русское «ш», но мягче."],
+  ["ʒ","measure","/ˈmeʒər/","мера","Как русское «ж», но мягче."],
+  ["tʃ","chair","/tʃer/","стул","Как русское «ч»."],
+  ["dʒ","job","/dʒɑːb/","работа","Как русское «дж» в слове «джаз»."],
+  ["l","light","/laɪt/","свет","В начале слова светлее русского «л», в конце слова — темнее и глуше."]
+]]
+];
+function renderIpa(){
+  var h='<div class="stack"><div class="panel"><h3>Знаки ударения</h3><p class="small" style="margin:8px 0 0">Значок <b>ˈ</b> перед слогом — основное ударение, <b>ˌ</b> — второстепенное (более слабое) в длинных словах. Ударный слог стоит сразу после значка.</p></div>';
+  IPA.forEach(function(g){
+    h+='<div class="panel"><h3>'+esc(g[0])+'</h3>';
+    g[1].forEach(function(r){
+      h+='<div class="phon-row"><span class="sym">/'+esc(r[0])+'/</span><span class="ex">'+esc(r[1])+' '+esc(r[2])+' — '+esc(r[3])+'</span><div class="desc">'+esc(r[4])+'</div></div>';
+    });
+    h+='</div>';
+  });
+  h+='</div>';
+  view.innerHTML=h;
+}
+
 /* ---------- routing ---------- */
 function render(){
-  document.getElementById("tabs").hidden=(ui.mode==="intro"||ui.mode==="quiz");
+  document.getElementById("tabs").hidden=(ui.mode==="quiz");
   Array.prototype.forEach.call(document.querySelectorAll("#tabs button"),function(b){b.setAttribute("aria-current",String(b.getAttribute("data-tab")===ui.mode))});
   document.getElementById("topinfo").textContent=DATA.length+" слов";
-  if(ui.mode==="home")renderHome();else if(ui.mode==="stats")renderStats();else if(ui.mode==="intro")renderIntro();else if(ui.mode==="quiz")renderQuiz();
+  if(ui.mode==="home")renderHome();else if(ui.mode==="stats")renderStats();else if(ui.mode==="ipa")renderIpa();else if(ui.mode==="quiz")renderQuiz();
 }
 document.getElementById("tabs").addEventListener("click",function(e){var b=e.target.closest("button");if(!b)return;ui={mode:b.getAttribute("data-tab")};render();window.scrollTo(0,0)});
 view.addEventListener("click",function(e){
   var b=e.target.closest("[data-act]");if(!b)return;var a=b.getAttribute("data-act");
   if(a==="speak")speak(b.getAttribute("data-t"));
   else if(a==="home"){ui={mode:"home"};render()}
-  else if(a==="intro")startIntro();
-  else if(a==="learn")learnCurrent();
   else if(a==="learn-inline"){var iid=ui.q.intro;if(!S.words[iid]){S.words[iid]={s:"L",c:0,k:0,t:T_NEW,st:0,due:0,ok:0,bad:0};if(S.credits>0)S.credits--;save()}nextQ()}
   else if(a==="practice")startQuiz("learn");
   else if(a==="review")startQuiz("review");
