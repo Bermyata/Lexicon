@@ -120,11 +120,13 @@ var STAGE_NAMES=["через 4 ч","через 12 ч","через 1 день","�
 var MAX_LEARN=20,MIN_ACTIVE=5,STREAK=3,T_NEW=10,T_RELAPSE=5,KEY="lexicon.v1";
 var S=null,ui={mode:"home"},view=document.getElementById("view");
 
+function pruneStale(words){Object.keys(words).forEach(function(id){if(!BYID.has(Number(id)))delete words[id]})}
 function load(){
   try{var r=localStorage.getItem(KEY);if(r)S=JSON.parse(r)}catch(e){}
   if(!S||!S.words)S={words:{},day:"",newToday:0,credits:0};
   if(typeof S.credits!=="number")S.credits=0;
   if(!Array.isArray(S.bks))S.bks=[];
+  pruneStale(S.words);
   rollDay();
 }
 function save(){S.ts=Date.now();try{localStorage.setItem(KEY,JSON.stringify(S))}catch(e){}queueSync()}
@@ -178,7 +180,7 @@ function pullRemote(){
   })
 }
 function adopt(rem){
-  S=rem;try{localStorage.setItem(KEY,JSON.stringify(S))}catch(e){}
+  S=rem;pruneStale(S.words);try{localStorage.setItem(KEY,JSON.stringify(S))}catch(e){}
   var c=chunkData();cloud.last={};Object.keys(c.str).forEach(function(n){cloud.last[n]=c.str[n]});
   cloud.last.meta=metaStr();cloud.count=wordCount(S.words);cloud.state="cloud";cloud.allow=false;
   if(ui.mode!=="home"&&ui.mode!=="stats"&&ui.mode!=="ipa"&&ui.mode!=="audio")ui={mode:"home"};
@@ -205,7 +207,7 @@ function restoreBackup(key){
     var ns={words:{},credits:(b.m&&b.m.credits)||0,day:(b.m&&b.m.day)||"",newToday:0,ts:0,bks:S.bks||[]};
     Object.keys(b).forEach(function(k){if(k!=="m"){var ws=b[k].w||{};for(var id in ws)ns.words[id]=ws[id]}});
     var keep=Object.keys(S.words).length?makeSnapshot(dayKey()+"p",S):Promise.resolve();
-    return keep.then(function(){ns.bks=S.bks||[];S=ns;cloud.allow=true;save()})
+    return keep.then(function(){ns.bks=S.bks||[];pruneStale(ns.words);S=ns;cloud.allow=true;save()})
   })
 }
 function cloudInit(){
@@ -219,7 +221,7 @@ function cloudInit(){
   }).then(function(r){
     if(!r)return;
     cloud.ok=true;cloud.state="cloud";
-    if(r.has&&(!Object.keys(S.words).length||r.rem.ts>=(S.ts||0))){adopt(r.rem)}
+    if(r.has&&(!S.ts||r.rem.ts>=(S.ts||0))){adopt(r.rem)}
     else{cloud.last={};cloud.count=r.has?wordCount(r.rem.words):0;if(r.has)S.bks=r.rem.bks;queueSync()}
     render();
     /* daily snapshot of the state as it was before today's work */
@@ -535,7 +537,7 @@ view.addEventListener("click",function(e){
   else if(a==="idk"){answer(false,null)}
   else if(a==="export"){document.getElementById("bk").value=JSON.stringify(S);document.getElementById("bk").select()}
   else if(a==="import"){var bm=document.getElementById("bkmsg");try{var o=JSON.parse(document.getElementById("bk").value);if(!o||!o.words)throw 0;
-      var doImp=function(){o.bks=S.bks||[];S=o;cloud.allow=true;save();rollDay();ui={mode:"stats",msg:"Прогресс восстановлен."};render()};
+      var doImp=function(){o.bks=S.bks||[];pruneStale(o.words);S=o;cloud.allow=true;save();rollDay();ui={mode:"stats",msg:"Прогресс восстановлен."};render()};
       if(cloud.ok&&Object.keys(S.words).length)makeSnapshot(dayKey()+"p",S).then(doImp,doImp);else doImp()
     }catch(err){bm.textContent="Не удалось прочитать копию. Вставьте текст целиком."}}
   else if(a==="reset"){if(!ui.resetArm){ui={mode:"stats",resetArm:true};render();return}
