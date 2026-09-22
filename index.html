@@ -105,6 +105,7 @@ textarea.field{padding:10px 12px;min-height:110px;font-size:13px;font-family:ui-
   <button data-tab="home" aria-current="true"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M4 11l8-7 8 7v9a1 1 0 0 1-1 1h-4v-6H9v6H5a1 1 0 0 1-1-1z"/></svg>Сегодня</button>
   <button data-tab="stats"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M5 20V10M12 20V4M19 20v-7"/></svg>Прогресс</button>
   <button data-tab="ipa"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M21 15a2 2 0 0 1-2 2H7l-4 4V5a2 2 0 0 1 2-2h14a2 2 0 0 1 2 2z"/></svg>Транскрипция</button>
+  <button data-tab="audio"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M3 18v-6a9 9 0 0 1 18 0v6"/><path d="M21 19a2 2 0 0 1-2 2h-1a2 2 0 0 1-2-2v-3a2 2 0 0 1 2-2h3zM3 19a2 2 0 0 0 2 2h1a2 2 0 0 0 2-2v-3a2 2 0 0 0-2-2H3z"/></svg>Аудио</button>
 </div></nav>
 
 <script>
@@ -180,7 +181,7 @@ function adopt(rem){
   S=rem;try{localStorage.setItem(KEY,JSON.stringify(S))}catch(e){}
   var c=chunkData();cloud.last={};Object.keys(c.str).forEach(function(n){cloud.last[n]=c.str[n]});
   cloud.last.meta=metaStr();cloud.count=wordCount(S.words);cloud.state="cloud";cloud.allow=false;
-  if(ui.mode!=="home"&&ui.mode!=="stats"&&ui.mode!=="ipa")ui={mode:"home"};
+  if(ui.mode!=="home"&&ui.mode!=="stats"&&ui.mode!=="ipa"&&ui.mode!=="audio")ui={mode:"home"};
   rollDay();
 }
 /* snapshot = copy of the progress under names b_<key>_<chunk>; the newest MAX_BKS are kept */
@@ -292,7 +293,7 @@ function renderHome(){
 }
 
 /* ---------- quiz ---------- */
-function startQuiz(kind){ui={mode:"quiz",kind:kind,recent:[],done:0,ok:0,bad:0,q:null};nextQ()}
+function startQuiz(kind){audioPause();ui={mode:"quiz",kind:kind,recent:[],done:0,ok:0,bad:0,q:null};nextQ()}
 function pickWord(){
   if(ui.kind==="review"){var d=dueList();return d.length?d[0]:null}
   var L=learning();if(!L.length)return null;
@@ -463,12 +464,58 @@ function renderIpa(){
   view.innerHTML=h;
 }
 
+/* ---------- audio ---------- */
+var AUDIO_GAP=900,AUDIO_NEXT=1600;
+var audio={playing:false,seq:0,timer:null,order:[],idx:0,current:null};
+function audioOrder(){return shuffle(DATA.map(function(d){return d[0]}))}
+function speakLang(text,lang,onend){
+  try{
+    var u=new SpeechSynthesisUtterance(text);u.lang=lang;u.rate=lang==="ru-RU"?.95:.9;
+    u.onend=onend;u.onerror=onend;speechSynthesis.speak(u);
+  }catch(e){onend()}
+}
+function audioStep(seq){
+  if(!audio.playing||seq!==audio.seq)return;
+  if(audio.idx>=audio.order.length){audio.order=audioOrder();audio.idx=0}
+  var d=BYID.get(audio.order[audio.idx++]);
+  audio.current=d;if(ui.mode==="audio")render();
+  speakLang(d[1],"en-US",function(){
+    if(!audio.playing||seq!==audio.seq)return;
+    audio.timer=setTimeout(function(){
+      if(!audio.playing||seq!==audio.seq)return;
+      speakLang(shortRu(d[3]),"ru-RU",function(){
+        if(!audio.playing||seq!==audio.seq)return;
+        audio.timer=setTimeout(function(){audioStep(seq)},AUDIO_NEXT);
+      });
+    },AUDIO_GAP);
+  });
+}
+function audioPlay(){
+  if(audio.playing)return;
+  audio.playing=true;audio.seq++;
+  if(!audio.order.length)audio.order=audioOrder();
+  audioStep(audio.seq);render();
+}
+function audioPause(){
+  if(!audio.playing)return;
+  audio.playing=false;audio.seq++;clearTimeout(audio.timer);
+  try{speechSynthesis.cancel()}catch(e){}
+  if(ui.mode==="audio")render();
+}
+function renderAudio(){
+  var d=audio.current,h='<div class="stack"><div class="panel" style="text-align:center;padding:36px 16px">';
+  h+=d?('<div class="word">'+esc(d[1])+'</div><div class="ipa">'+esc(d[2])+'</div><div class="ru" style="margin-top:10px">'+esc(shortRu(d[3]))+'</div>'):'<p class="lead" style="margin:0">Наденьте наушники и нажмите «Играть» — слова на английском и перевод на русском пойдут вперемешку, в случайном порядке.</p>';
+  h+='</div><button class="btn primary block" data-act="'+(audio.playing?"audio-pause":"audio-play")+'">'+(audio.playing?"Пауза":"Играть")+'</button>';
+  h+='<p class="muted small" style="text-align:center;margin:4px 0 0">Отдельный режим для прослушивания — без связи с прогрессом изучения.</p></div>';
+  view.innerHTML=h;
+}
+
 /* ---------- routing ---------- */
 function render(){
   document.getElementById("tabs").hidden=(ui.mode==="quiz");
   Array.prototype.forEach.call(document.querySelectorAll("#tabs button"),function(b){b.setAttribute("aria-current",String(b.getAttribute("data-tab")===ui.mode))});
   document.getElementById("topinfo").textContent=DATA.length+" слов";
-  if(ui.mode==="home")renderHome();else if(ui.mode==="stats")renderStats();else if(ui.mode==="ipa")renderIpa();else if(ui.mode==="quiz")renderQuiz();
+  if(ui.mode==="home")renderHome();else if(ui.mode==="stats")renderStats();else if(ui.mode==="ipa")renderIpa();else if(ui.mode==="audio")renderAudio();else if(ui.mode==="quiz")renderQuiz();
 }
 document.getElementById("tabs").addEventListener("click",function(e){var b=e.target.closest("button");if(!b)return;ui={mode:b.getAttribute("data-tab")};render();window.scrollTo(0,0)});
 view.addEventListener("click",function(e){
@@ -478,6 +525,8 @@ view.addEventListener("click",function(e){
   else if(a==="learn-inline"){var iid=ui.q.intro;if(!S.words[iid]){S.words[iid]={s:"L",c:0,k:0,t:T_NEW,st:0,due:0,ok:0,bad:0};if(S.credits>0)S.credits--;save()}nextQ()}
   else if(a==="practice")startQuiz("learn");
   else if(a==="review")startQuiz("review");
+  else if(a==="audio-play")audioPlay();
+  else if(a==="audio-pause")audioPause();
   else if(a==="next"){nextQ();window.scrollTo(0,0)}
   else if(a==="pick"){var id=Number(b.getAttribute("data-id"));answer(id===ui.q.id,id)}
   else if(a==="check"){doCheck()}
