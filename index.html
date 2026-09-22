@@ -117,10 +117,10 @@ var SG=[],PH=[];DATA.forEach(function(d){(d[1].indexOf(" ")>=0?PH:SG).push(d[0])
 var H=3600e3;
 var INT=[4,12,24,144,288,576,1152,2304,4320].map(function(h){return h*H});
 var STAGE_NAMES=["через 4 ч","через 12 ч","через 1 день","через 6 дней","через 12 дней","через 24 дня","через 48 дней","через 96 дней","через 180 дней"];
-var MAX_LEARN=50,MIN_ACTIVE=5,STREAK=3,T_NEW=9,T_RELAPSE=5,KEY="lexicon.v1";
+var MAX_LEARN=50,MIN_ACTIVE=5,STREAK=3,T_NEW=6,REVIEW_MISSES=2,KEY="lexicon.v1";
 var S=null,ui={mode:"home"},view=document.getElementById("view");
 
-function pruneStale(words){Object.keys(words).forEach(function(id){if(!BYID.has(Number(id)))delete words[id];else if(words[id].s==="L"&&words[id].t===10)words[id].t=T_NEW})}
+function pruneStale(words){Object.keys(words).forEach(function(id){if(!BYID.has(Number(id)))delete words[id];else if(words[id].s==="L"){var w=words[id];w.t=T_NEW;if(w.c>=STREAK)w.u=1}})}
 function load(){
   try{var r=localStorage.getItem(KEY);if(r)S=JSON.parse(r)}catch(e){}
   if(!S||!S.words)S={words:{},day:"",newToday:0,credits:0};
@@ -292,7 +292,7 @@ function renderHome(){
   var next=null;R.forEach(function(id){var w=S.words[id];if(w.due>Date.now()&&(next===null||w.due<next))next=w.due});
   var h='<div class="stack">'+guardHtml();
   h+='<div class="panel card-task"><div class="meta"><div><h3>В изучении</h3><p class="note">Нужно '+T_NEW+' верных ответов, чтобы слово считалось выученным</p></div><div class="big tick">'+L.length+'<span class="muted" style="font-size:18px">/'+MAX_LEARN+'</span></div></div>';
-  h+='<div class="meter"><i style="width:'+(L.length/MAX_LEARN*100)+'%"></i></div>';
+  h+='<div class="meter"><i style="width:'+Math.min(100,L.length/MAX_LEARN*100)+'%"></i></div>';
   h+='<button class="btn primary block" data-act="practice"'+(L.length||room?"":" disabled")+'>Учить</button></div>';
   h+='<div class="panel card-task"><div class="meta"><div><h3>Повторение</h3><p class="note">'+(due.length?"Пора повторить, чтобы не забыть":(R.length?(next?"Ближайшее повторение через "+fmtDur(next-Date.now()):""):"Выученные слова появятся здесь"))+'</p></div><div class="big tick">'+due.length+'</div></div>';
   h+='<button class="btn primary block" data-act="review"'+(due.length?"":" disabled")+'>Повторить</button></div>';
@@ -345,12 +345,12 @@ function answer(correct,given,note){
   var q=ui.q,w=S.words[q.id];q.answered=true;q.correct=correct;q.given=given;q.note=note||"";ui.done++;
   if(correct){
     ui.ok++;w.ok++;
-    if(w.s==="L"){w.c++;w.k=(w.k||0)+1;if(w.k>=STREAK){w.k=0;S.credits++;q.unlocked=true}if(w.c>=w.t){w.s="R";w.st=0;w.due=Date.now()+INT[0];q.grad=true}}
-    else{w.st=Math.min(w.st+1,8);w.due=Date.now()+INT[w.st];q.next=INT[w.st]}
+    if(w.s==="L"){w.c++;if(w.c>=STREAK&&!w.u){w.u=1;S.credits++;q.unlocked=true}if(w.c>=w.t){w.s="R";w.st=0;w.m=0;w.due=Date.now()+INT[0];q.grad=true}}
+    else{w.m=0;w.st=Math.min(w.st+1,8);w.due=Date.now()+INT[w.st];q.next=INT[w.st]}
   }else{
     ui.bad++;w.bad++;
-    if(w.s==="L"){w.c=Math.max(0,w.c-1);w.k=0}
-    else{w.s="L";w.c=0;w.k=0;w.t=T_RELAPSE;w.st=0;w.due=0;q.relapsed=true}
+    if(w.s==="L"){if(w.c>=STREAK){w.c=STREAK;q.floor=true}else{q.reset=w.c>0;w.c=0}}
+    else{w.m=(w.m||0)+1;if(w.m>=REVIEW_MISSES){w.s="L";w.c=0;w.u=0;w.m=0;w.t=T_NEW;w.st=0;w.due=0;q.relapsed=true}else{w.st=0;w.due=Date.now()+INT[0];q.warned=true}}
   }
   ui.recent.push(q.id);save();render();
   if(correct)speak(BYID.get(q.id)[1]);
@@ -365,7 +365,7 @@ function renderQuiz(){
   if(q.intro){var di=BYID.get(q.intro);view.innerHTML=top+'<div class="fb info">Открывается новое слово</div><div style="height:12px"></div><div class="panel">'+wordHead(di)+'<div class="label">Перевод</div><div class="ru">'+esc(di[3])+'</div>'+details(di)+'</div><div style="height:12px"></div><button class="btn primary block" data-act="learn-inline">Начать учить</button>';return}
   var d=BYID.get(q.id),w=S.words[q.id],h=top+'<div class="stack">';
   h+='<div class="panel prompt">';
-  h+='<div class="row wrap" style="margin-bottom:10px"><span class="small muted">'+(w.s==="L"?"Изучение · "+w.c+" из "+w.t+" · подряд "+(w.k||0)+" из "+STREAK:"Повторение")+'</span>'+(w.s==="L"?dots(w):"")+'</div>';
+  h+='<div class="row wrap" style="margin-bottom:10px"><span class="small muted">'+(w.s==="L"?"Изучение · "+w.c+" из "+w.t+(w.u?"":" · новое слово после "+STREAK):"Повторение"+(w.m?" · была ошибка":""))+'</span>'+(w.s==="L"?dots(w):"")+'</div>';
   if(q.type==="en-ru"){h+='<div class="small muted" style="margin-bottom:6px">Выберите перевод</div>'+wordHead(d)}
   else if(q.type==="ru-en"){h+='<div class="small muted" style="margin-bottom:6px">Выберите английское слово</div><div class="ru" style="font-size:24px">'+esc(d[3])+'</div>'}
   else{h+='<div class="small muted" style="margin-bottom:6px">Напишите по-английски</div><div class="ru" style="font-size:24px">'+esc(d[3])+'</div>'}
@@ -384,9 +384,9 @@ function renderQuiz(){
   if(q.answered){
     var okc=q.correct;
     h+='<div class="fb '+(okc?"ok":"bad")+'">'+(okc?"Верно":"Неверно")+(q.note?" — "+esc(q.note):"")
-      +(q.unlocked?". Три верных ответа подряд — откроется новое слово":"")+(q.grad?". Слово выучено, первое повторение "+STAGE_NAMES[0]:"")
+      +(q.unlocked?". "+STREAK+" верных ответа — откроется новое слово":"")+(q.floor?". Счётчик вернулся к "+STREAK:"")+(q.reset?". Счётчик сброшен до 0":"")+(q.grad?". Слово выучено, первое повторение "+STAGE_NAMES[0]:"")
       +(q.next?". Следующее повторение через "+fmtDur(q.next):"")
-      +(q.relapsed?". Слово вернулось в изучение: нужно "+T_RELAPSE+" верных ответов":"")+'</div>';
+      +(q.warned?". Первая ошибка на повторении: при следующей ошибке подряд слово вернётся в изучение":"")+(q.relapsed?". Вторая ошибка подряд: слово вернулось в изучение, нужно "+T_NEW+" верных ответов":"")+'</div>';
     h+='<div class="panel">'+wordHead(d)+'<div class="label">Перевод</div><div class="ru">'+esc(d[3])+'</div>'+details(d)+'</div>';
     h+='<button class="btn primary block" data-act="next">Дальше</button>';
   }
