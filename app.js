@@ -139,10 +139,20 @@ function newRoom(){var n=learning().length;return Math.max(0,Math.min(MAX_LEARN-
 function variants(ru){return String(ru).split(";").map(function(x){return x.trim().toLowerCase()}).filter(Boolean)}
 function shareVariant(a,b){var va=variants(a),vb=variants(b);return va.some(function(x){return vb.indexOf(x)>=0})}
 function shortRu(ru){return String(ru).split(";")[0].trim()}
+/* exact to the minute below a day: rounding to whole hours made every fresh word read "4 ч" */
 function fmtDur(ms){
-  var m=Math.round(ms/60000);if(m<1)return "меньше минуты";if(m<60)return m+" мин";
-  var h=Math.round(ms/H);if(h<48)return h+" ч";var d=Math.round(ms/(24*H));return d+" дн."
+  var m=Math.ceil(ms/60000);if(m<1)return "меньше минуты";if(m<60)return m+" мин";
+  if(m<24*60){var h=Math.floor(m/60),r=m%60;return h+" ч"+(r?" "+r+" мин":"")}
+  var d=Math.floor(m/1440),hh=Math.floor((m%1440)/60);return d+" дн."+(d<7&&hh?" "+hh+" ч":"")
 }
+var MONTHS=["янв","фев","мар","апр","мая","июн","июл","авг","сен","окт","ноя","дек"];
+function fmtWhen(t){
+  var d=new Date(t),now=new Date(),day=function(x){return new Date(x.getFullYear(),x.getMonth(),x.getDate()).getTime()};
+  var diff=Math.round((day(d)-day(now))/864e5),hm=fmtTime(t);
+  if(diff===0)return "сегодня в "+hm;if(diff===1)return "завтра в "+hm;
+  return d.getDate()+" "+MONTHS[d.getMonth()]+" в "+hm;
+}
+function upcoming(){var n=Date.now();return reviewList().filter(function(id){return S.words[id].due>n}).sort(function(a,b){return S.words[a].due-S.words[b].due})}
 function speak(t){try{var u=new SpeechSynthesisUtterance(t);u.lang=L.tts;u.rate=.9;speechSynthesis.cancel();speechSynthesis.speak(u)}catch(e){}}
 function shuffle(a){for(var i=a.length-1;i>0;i--){var j=Math.random()*(i+1)|0,t=a[i];a[i]=a[j];a[j]=t}return a}
 function newWord(){return{s:"L",c:0,t:T_NEW,st:0,due:0,ok:0,bad:0}}
@@ -250,7 +260,7 @@ function renderHome(){
   h+='<div class="panel card-task"><div class="meta"><div><h3>В изучении</h3><p class="note">Нужно '+T_NEW+' верных ответов, чтобы слово считалось выученным. После '+STREAK+'-го открывается новое слово</p></div><div class="big tick">'+Ln.length+'<span class="muted" style="font-size:18px">/'+MAX_LEARN+'</span></div></div>';
   h+='<div class="meter"><i style="width:'+Math.min(100,Ln.length/MAX_LEARN*100)+'%"></i></div>';
   h+='<button class="btn primary block" data-act="practice"'+(Ln.length||room?"":" disabled")+'>Учить</button></div>';
-  h+='<div class="panel card-task"><div class="meta"><div><h3>Повторение</h3><p class="note">'+(due.length?"Пора повторить, чтобы не забыть":(R.length?(next?"Ближайшее повторение через "+fmtDur(next-Date.now()):""):"Выученные слова появятся здесь"))+'</p></div><div class="big tick">'+due.length+'</div></div>';
+  h+='<div class="panel card-task"><div class="meta"><div><h3>Повторение</h3><p class="note">'+(due.length?"Пора повторить, чтобы не забыть":(R.length?(next?"Ближайшее повторение через "+fmtDur(next-Date.now())+" ("+fmtWhen(next)+")"+(R.length>1?". Своё время у каждого слова — см. «Прогресс»":""):""):"Выученные слова появятся здесь"))+'</p></div><div class="big tick">'+due.length+'</div></div>';
   h+='<button class="btn primary block" data-act="review"'+(due.length?"":" disabled")+'>Повторить</button></div>';
   h+='</div>';
   view.innerHTML=h;
@@ -368,6 +378,12 @@ function renderStats(){
   h+='<div class="panel"><h3 style="margin-bottom:12px">Выученные по интервалам</h3><div class="bars">';
   for(var s=0;s<9;s++)h+='<div class="bar"><span class="muted">'+STAGE_NAMES[s].replace("через ","")+'</span><div class="meter"><i style="width:'+(stg[s]/mx*100)+'%"></i></div><b>'+stg[s]+'</b></div>';
   h+='</div></div>';
+  var up=upcoming();
+  if(up.length){
+    h+='<div class="panel"><h3 style="margin-bottom:6px">Расписание повторений</h3><div class="list">';
+    up.slice(0,30).forEach(function(id){var d=BYID.get(id),w=S.words[id];h+='<div class="li"><div><b>'+esc(d[1])+'</b><div class="muted small">'+esc(shortRu(d[3]))+'</div></div><div class="small" style="text-align:right">'+esc(fmtWhen(w.due))+'<div class="muted">через '+esc(fmtDur(w.due-Date.now()))+'</div></div></div>'});
+    h+='</div>'+(up.length>30?'<p class="muted small" style="margin:8px 0 0">и ещё '+(up.length-30)+'</p>':'')+'</div>';
+  }
   h+='<div class="panel"><h3 style="margin-bottom:6px">Сейчас в изучении</h3>';
   if(!Ln.length)h+='<p class="muted" style="margin:0">Пока нет слов. Нажмите «Учить» на главной, чтобы начать.</p>';
   else{h+='<div class="list">';Ln.forEach(function(id){var d=BYID.get(id),w=S.words[id];h+='<div class="li"><div><b>'+esc(d[1])+'</b><div class="ipa" style="font-size:14px">'+esc(d[2])+'</div><div class="muted small">'+esc(d[3])+'</div></div>'+dots(w)+'</div>'});h+='</div>'}
@@ -514,6 +530,8 @@ document.addEventListener("keydown",function(e){
   if(e.key!=="Enter"||ui.mode!=="quiz"||!ui.q)return;
   if(ui.q.answered){nextQ();window.scrollTo(0,0)}else if(ui.q.type==="type"){doCheck()}
 });
+
+setInterval(function(){if(document.visibilityState==="visible"&&S&&(ui.mode==="home"||(ui.mode==="stats"&&!ui.resetArm&&!document.getElementById("bk").value)))render()},60000);
 
 /* ---------- updates: reload when a newer version is deployed ---------- */
 function checkVersion(){
