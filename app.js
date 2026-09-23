@@ -19,7 +19,7 @@ var sb=null,user=null,offlineUser=false;
 var lang=null,L=LANGS.en,DATA=[],BYID=new Map(),SG=[],PH=[],IPA=[],IPA_TITLE="",IPA_NOTE="";
 var dataCache={};
 var S=null,ui={mode:"boot"},view=document.getElementById("view");
-var APP_VERSION=null;
+var APP_VERSION=null,googleOn=false;
 
 function lsGet(k){try{return localStorage.getItem(k)}catch(e){return null}}
 function lsSet(k,v){try{localStorage.setItem(k,v)}catch(e){}}
@@ -189,7 +189,7 @@ function renderAuth(){
   h+='<div style="height:14px"></div><button class="btn primary block" type="submit"'+(busy?" disabled":"")+'>'+(busy?"Подождите…":(reg?"Зарегистрироваться":"Войти"))+'</button></form>';
   if(ui.err)h+='<p class="err" role="alert">'+esc(ui.err)+'</p>';
   if(ui.info)h+='<p class="note-ok">'+esc(ui.info)+'</p>';
-  h+='<div class="or">или</div><button class="btn block" data-act="google"'+(busy?" disabled":"")+'>Войти через Google</button>';
+  if(googleOn)h+='<div class="or">или</div><button class="btn block" data-act="google"'+(busy?" disabled":"")+'>Войти через Google</button>';
   h+='<div class="center"><button class="linkbtn" data-act="auth-toggle">'+(reg?"Уже есть аккаунт? Войти":"Нет аккаунта? Зарегистрироваться")+'</button></div>';
   if(!reg)h+='<div class="center"><button class="linkbtn" data-act="forgot">Забыли пароль?</button></div>';
   h+='</div></div>';
@@ -534,8 +534,15 @@ window.addEventListener("online",function(){
 });
 
 /* ---------- boot ---------- */
+/* show the Google button only once the provider is enabled in Supabase */
+function checkProviders(){
+  fetch(SB_URL+"/auth/v1/settings",{headers:{apikey:SB_KEY}}).then(function(r){return r.json()}).then(function(st){
+    var on=!!(st&&st.external&&st.external.google);
+    if(on!==googleOn){googleOn=on;if(ui.mode==="auth")render()}
+  }).catch(function(){});
+}
 function boot(){
-  checkVersion();
+  checkVersion();checkProviders();
   if(!window.supabase||!window.supabase.createClient){bootOffline();return}
   sb=window.supabase.createClient(SB_URL,SB_KEY,{auth:{persistSession:true,autoRefreshToken:true,detectSessionInUrl:true}});
   sb.auth.onAuthStateChange(function(ev,session){
