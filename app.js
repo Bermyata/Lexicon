@@ -108,7 +108,8 @@ function guardHtml(){
 /* ---------- language data ---------- */
 function loadLang(code){
   if(dataCache[code])return Promise.resolve(dataCache[code]);
-  return fetch("data/"+code+".json").then(function(r){if(!r.ok)throw new Error("HTTP "+r.status);return r.json()}).then(function(o){dataCache[code]=o;return o});
+  /* no-cache = revalidate with the server (cheap 304 when unchanged); GitHub Pages lets browsers reuse files for 10 min otherwise */
+  return fetch("data/"+code+".json",{cache:"no-cache"}).then(function(r){if(!r.ok)throw new Error("HTTP "+r.status);return r.json()}).then(function(o){dataCache[code]=o;return o});
 }
 function openLang(code){
   if(!LANGS[code])code="en";

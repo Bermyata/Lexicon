@@ -1,5 +1,5 @@
 /* Network-first: online users always get the latest deploy, offline users get the last cached copy. */
-var CACHE = "lexicon-v1";
+var CACHE = "lexicon-v2";
 var SHELL = ["./", "index.html", "app.css", "app.js", "vendor/supabase.js", "manifest.webmanifest",
   "icons/icon-192.png", "icons/apple-touch-icon.png"];
 
@@ -15,7 +15,8 @@ self.addEventListener("fetch", function (e) {
   var req = e.request, url = new URL(req.url);
   if (req.method !== "GET" || url.origin !== self.location.origin) return;
   if (url.pathname.endsWith("/version.json")) return;
-  e.respondWith(fetch(req).then(function (res) {
+  /* always revalidate with the server so a fresh deploy is never masked by the 10-minute HTTP cache */
+  e.respondWith(fetch(req.url, { cache: "no-cache", credentials: "same-origin" }).then(function (res) {
     if (res.ok) { var copy = res.clone(); caches.open(CACHE).then(function (c) { c.put(req, copy); }); }
     return res;
   }).catch(function () {
