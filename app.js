@@ -168,6 +168,12 @@ function details(d){
     h+=d[9].map(function(sid){var s=BYID.get(sid);return s?'<button class="btn" data-act="lookup" data-id="'+sid+'">'+esc(s[1])+'</button>':''}).join("");
     h+='</div>';
   }
+  /* same words written apart / hyphenated / solid (follow up vs follow-up) */
+  if(d[10]&&d[10].length){
+    h+='<div class="label">Не путать с</div><div class="stack" style="gap:8px">';
+    h+=d[10].map(function(rid){var r=BYID.get(rid);return r?'<button class="btn block" style="justify-content:flex-start;text-align:left" data-act="lookup" data-id="'+rid+'"><span><b>'+esc(r[1])+'</b> <span class="muted">— '+esc(shortRu(r[3]))+'</span></span></button>':''}).join("");
+    h+='</div>';
+  }
   h+='<div class="label">Примеры</div>';
   h+='<div class="ex"><p class="en">'+esc(d[5])+'</p><p class="tr">'+esc(d[6])+'</p></div>';
   h+='<div class="ex"><p class="en">'+esc(d[7])+'</p><p class="tr">'+esc(d[8])+'</p></div>';
@@ -301,11 +307,13 @@ function nextQ(){
   if(t!=="type")q.opts=buildOpts(id);
   ui.q=q;render();
 }
-function norm(s){return String(s).normalize("NFD").replace(/[̀-ͯ]/g,"").toLowerCase().replace(/[’]/g,"'").replace(/[^a-z0-9' ]/g," ").replace(/\s+/g," ").trim()}
+function norm(s){return String(s).normalize("NFD").replace(/[̀-ͯ]/g,"").toLowerCase().replace(/[’]/g,"'").replace(/[^a-z0-9' -]/g," ").replace(/\s+/g," ").trim()}
 function lev(a,b){var m=a.length,n=b.length,p=[],i,j;for(j=0;j<=n;j++)p[j]=j;for(i=1;i<=m;i++){var prev=p[0];p[0]=i;for(j=1;j<=n;j++){var t=p[j];p[j]=Math.min(p[j]+1,p[j-1]+1,prev+(a[i-1]===b[j-1]?0:1));prev=t}}return p[n]}
+function joined(x){return x.replace(/^(to) /,"").replace(/[\s-]/g,"")}
 function checkTyped(word,val){
   var a=norm(word),b=norm(val);if(!b)return 0;if(a===b)return 1;
   var st=function(x){return L.articles?x.replace(L.articles,""):x};if(st(a)===st(b))return 1;
+  if(joined(a)===joined(b))return 3;
   if(a.length>=7&&lev(st(a),st(b))<=1)return 2;return 0;
 }
 function answer(correct,given,note){
@@ -525,6 +533,12 @@ view.addEventListener("input",function(e){
 function doCheck(){
   var ti=document.getElementById("typed");if(!ti||!ti.value.trim())return;
   var d=BYID.get(ui.q.id),r=checkTyped(d[1],ti.value);
+  if(r===3){
+    /* only the spacing/hyphen differs: wrong if that spelling is a different word in the dictionary */
+    var b=norm(ti.value),other=(d[10]||[]).map(function(id){return BYID.get(id)}).filter(function(x){return x&&norm(x[1]).replace(/^to /,"")===b.replace(/^to /,"")})[0];
+    if(other){answer(false,ti.value,"«"+other[1]+"» — другое слово ("+shortRu(other[3])+"), здесь нужно «"+d[1]+"»");return}
+    answer(true,ti.value,"засчитано, но пишется «"+d[1]+"»");return;
+  }
   answer(r>0,ti.value,r===2?"почти, опечатка засчитана":(r===0?"вы написали: "+ti.value:""));
 }
 document.addEventListener("keydown",function(e){
