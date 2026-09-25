@@ -17,7 +17,7 @@ var MAX_LEARN=50,MIN_ACTIVE=5,STREAK=3,T_NEW=6,REVIEW_MISSES=2;
 /* ---------- state ---------- */
 var sb=null,user=null,offlineUser=false;
 var lang=null,L=LANGS.en,DATA=[],BYID=new Map(),SG=[],PH=[],IPA=[],IPA_TITLE="",IPA_NOTE="";
-var dataCache={};
+var dataCache={},MERGED={},ALT={};
 var S=null,ui={mode:"boot"},view=document.getElementById("view");
 var APP_VERSION=null,googleOn=false;
 
@@ -28,7 +28,13 @@ function stateKey(){return "lexicon.p."+(user?user.id:"anon")+"."+lang}
 
 /* ---------- progress (per user, per language) ---------- */
 function blank(){return{words:{},day:"",newToday:0,credits:0,ts:0}}
-function pruneStale(words){Object.keys(words).forEach(function(id){if(!BYID.has(Number(id)))delete words[id];else if(words[id].s==="L"){var w=words[id];w.t=T_NEW;if(w.c>=STREAK)w.u=1}})}
+/* drop progress for removed words; words merged into another card hand their progress over */
+function pruneStale(words){
+  Object.keys(words).forEach(function(id){
+    if(!BYID.has(Number(id))){var to=MERGED[id];if(to&&!words[to])words[to]=words[id];delete words[id];if(!to)return;id=String(to)}
+    var w=words[id];if(w&&w.s==="L"){w.t=T_NEW;if(w.c>=STREAK)w.u=1}
+  });
+}
 function normalize(o){
   if(!o||typeof o!=="object"||!o.words)o=blank();
   if(typeof o.credits!=="number")o.credits=0;
@@ -118,7 +124,7 @@ function openLang(code){
   ui={mode:"loading"};render();
   return loadLang(code).then(function(o){
     lang=code;L=LANGS[code];lsSet("lexicon.lang",code);
-    DATA=o.dict;IPA=o.ipa;IPA_TITLE=o.ipaTitle;IPA_NOTE=o.ipaNote;
+    DATA=o.dict;IPA=o.ipa;IPA_TITLE=o.ipaTitle;IPA_NOTE=o.ipaNote;MERGED=o.merged||{};ALT=o.altSpell||{};
     BYID=new Map();SG=[];PH=[];
     DATA.forEach(function(d){BYID.set(d[0],d);(d[1].indexOf(" ")>=0?PH:SG).push(d[0])});
     cloud={state:canCloud()?"sync":"local",count:0,allow:false,timer:null,busy:false,again:false,lastSync:0};
@@ -533,6 +539,7 @@ view.addEventListener("input",function(e){
 function doCheck(){
   var ti=document.getElementById("typed");if(!ti||!ti.value.trim())return;
   var d=BYID.get(ui.q.id),r=checkTyped(d[1],ti.value);
+  if(ALT[d[0]]&&norm(ti.value)===norm(ALT[d[0]])){answer(true,ti.value,"британское написание, тоже верно (в словаре американское: «"+d[1]+"»)");return}
   if(r===3){
     /* only the spacing/hyphen differs: wrong if that spelling is a different word in the dictionary */
     var b=norm(ti.value),other=(d[10]||[]).map(function(id){return BYID.get(id)}).filter(function(x){return x&&norm(x[1]).replace(/^to /,"")===b.replace(/^to /,"")})[0];

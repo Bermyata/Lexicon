@@ -6,6 +6,9 @@ Word trainer (Russian speakers learning English and Dutch). Installed on iPhone 
 - `index.html`, `app.css`, `app.js` — the app, served by GitHub Pages from `main` at https://bermyata.github.io/Lexicon/
 - `data/en.json`, `data/nl.json` — per language `{dict, ipa, ipaTitle, ipaNote}`.
   `dict` rows: `[id, word, ipa, ru, usage, ex1, ex1ru, ex2, ex2ru, synonymIds?, relatedFormIds?]`. Ids are progress keys: never renumber; new words get the next free id.
+  `merged` maps a removed id to the card it was folded into (progress moves over); removed ids are never reused.
+  `altSpell` gives the other spelling of a merged British/American pair (emphasize/emphasise); typing it counts as correct.
+  No two cards may share the same Russian translation: the ru→en quiz could not tell them apart.
   `relatedFormIds` links spellings of one word that are different words (follow up / follow-up, take over / takeover); shown as «Не путать с», and typing the linked form counts as wrong.
 - `vendor/supabase.js` — supabase-js UMD build (2.117.0), vendored so the app works offline.
 - `sw.js` — service worker, network-first with cache fallback.
