@@ -108,3 +108,19 @@ textarea.field{padding:10px 12px;min-height:110px;font-size:13px;font-family:ui-
 .or:before,.or:after{content:"";flex:1;height:1px;background:var(--line)}
 .linkbtn{background:none;border:0;padding:0;color:var(--accent);font-weight:600;min-height:32px}
 .center{text-align:center}
+/* dictionary */
+.dgroup{padding:0;overflow:hidden}
+.dhead{width:100%;display:flex;align-items:center;justify-content:space-between;gap:12px;padding:14px 16px;background:none;border:0;color:inherit;text-align:left;font:inherit}
+.dhead>span:first-child{display:flex;flex-direction:column;gap:2px}
+.dhead .chev{font-size:24px;color:var(--muted);transition:transform .15s}
+.dhead[aria-expanded="true"] .chev{transform:rotate(90deg)}
+.din{padding:0 16px 12px;border-top:1px solid var(--line)}
+.dlist{display:flex;flex-direction:column}
+.panel.dlist{padding:4px 16px}
+.drow{display:flex;align-items:center;justify-content:space-between;gap:12px;width:100%;min-height:52px;padding:8px 0;background:none;border:0;border-top:1px solid var(--line);color:inherit;text-align:left;font:inherit}
+.dlist .drow:first-child{border-top:0}
+.drow .dw{display:flex;flex-direction:column;min-width:0}
+.drow .dw b{font-weight:600}
+.drow .dw .muted{font-size:14px;overflow:hidden;text-overflow:ellipsis;white-space:nowrap}
+.dst{flex:none;padding:2px 8px;border-radius:99px;background:var(--accent-soft);color:var(--accent);font-size:12px;font-weight:600}
+.dst.ok{background:var(--ok-soft);color:var(--ok)}

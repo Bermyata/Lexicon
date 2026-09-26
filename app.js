@@ -12,12 +12,13 @@ var LANG_ORDER=["en","nl"];
 var H=3600e3;
 var INT=[4,12,24,144,288,576,1152,2304,4320].map(function(h){return h*H});
 var STAGE_NAMES=["через 4 ч","через 12 ч","через 1 день","через 6 дней","через 12 дней","через 24 дня","через 48 дней","через 96 дней","через 180 дней"];
-var MAX_LEARN=50,MIN_ACTIVE=5,STREAK=3,T_NEW=6,REVIEW_MISSES=2;
+var MIN_ACTIVE=5,STREAK=3,T_NEW=6,REVIEW_MISSES=2;
 
 /* ---------- state ---------- */
 var sb=null,user=null,offlineUser=false;
 var lang=null,L=LANGS.en,DATA=[],BYID=new Map(),SG=[],PH=[],IPA=[],IPA_TITLE="",IPA_NOTE="";
-var dataCache={},MERGED={},ALT={};
+var dataCache={},MERGED={},ALT={},TOPICS=[];
+var dict={open:{},shown:{},q:"",arm:null,scroll:0};
 var S=null,ui={mode:"boot"},view=document.getElementById("view");
 var APP_VERSION=null,googleOn=false;
 
@@ -119,14 +120,14 @@ function loadLang(code){
 }
 function openLang(code){
   if(!LANGS[code])code="en";
-  audioPause();
   if(S&&lang)storeLocal();
   ui={mode:"loading"};render();
   return loadLang(code).then(function(o){
     lang=code;L=LANGS[code];lsSet("lexicon.lang",code);
-    DATA=o.dict;IPA=o.ipa;IPA_TITLE=o.ipaTitle;IPA_NOTE=o.ipaNote;MERGED=o.merged||{};ALT=o.altSpell||{};
+    DATA=o.dict;TOPICS=o.topics||[{id:"all",name:"Все слова",ids:o.dict.map(function(d){return d[0]})}];IPA=o.ipa;IPA_TITLE=o.ipaTitle;IPA_NOTE=o.ipaNote;MERGED=o.merged||{};ALT=o.altSpell||{};
     BYID=new Map();SG=[];PH=[];
     DATA.forEach(function(d){BYID.set(d[0],d);(d[1].indexOf(" ")>=0?PH:SG).push(d[0])});
+    dict={open:{},shown:{},q:"",arm:null,scroll:0};
     cloud={state:canCloud()?"sync":"local",count:0,allow:false,timer:null,busy:false,again:false,lastSync:0};
     loadLocal();
     ui={mode:"home"};render();window.scrollTo(0,0);
@@ -142,7 +143,7 @@ function learning(){return Object.keys(S.words).filter(function(id){return S.wor
 function dueList(){var n=Date.now();return Object.keys(S.words).filter(function(id){var w=S.words[id];return w.s==="R"&&w.due<=n}).map(Number).sort(function(a,b){return S.words[a].due-S.words[b].due})}
 function reviewList(){return Object.keys(S.words).filter(function(id){return S.words[id].s==="R"}).map(Number)}
 function nextNew(n){var out=[];for(var i=0;i<DATA.length&&out.length<n;i++){if(!S.words[DATA[i][0]])out.push(DATA[i][0])}return out}
-function newRoom(){var n=learning().length;return Math.max(0,Math.min(MAX_LEARN-n,Math.max(S.credits||0,MIN_ACTIVE-n)))}
+function newRoom(){var n=learning().length;return Math.max(0,S.credits||0,MIN_ACTIVE-n)}
 function variants(ru){return String(ru).split(";").map(function(x){return x.trim().toLowerCase()}).filter(Boolean)}
 function shareVariant(a,b){var va=variants(a),vb=variants(b);return va.some(function(x){return vb.indexOf(x)>=0})}
 function shortRu(ru){return String(ru).split(";")[0].trim()}
@@ -253,7 +254,6 @@ function afterUser(){
   if(saved&&LANGS[saved])openLang(saved);else{ui={mode:"pick"};render()}
 }
 function signOut(){
-  audioPause();
   var fin=function(){user=null;offlineUser=false;lang=null;S=null;lsDel("lexicon.lastUser");ui={mode:"auth"};render()};
   if(S)storeLocal();
   if(sb)sb.auth.signOut().then(fin,fin);else fin();
@@ -270,8 +270,8 @@ function renderHome(){
   var Ln=learning(),due=dueList(),room=newRoom(),R=reviewList();
   var next=null;R.forEach(function(id){var w=S.words[id];if(w.due>Date.now()&&(next===null||w.due<next))next=w.due});
   var h='<div class="stack">'+langSwitch()+guardHtml();
-  h+='<div class="panel card-task"><div class="meta"><div><h3>В изучении</h3><p class="note">Нужно '+T_NEW+' верных ответов, чтобы слово считалось выученным. После '+STREAK+'-го открывается новое слово</p></div><div class="big tick">'+Ln.length+'<span class="muted" style="font-size:18px">/'+MAX_LEARN+'</span></div></div>';
-  h+='<div class="meter"><i style="width:'+Math.min(100,Ln.length/MAX_LEARN*100)+'%"></i></div>';
+  h+='<div class="panel card-task"><div class="meta"><div><h3>В изучении</h3><p class="note">Нужно '+T_NEW+' верных ответов, чтобы слово считалось выученным. После '+STREAK+'-го открывается новое слово</p></div><div class="big tick">'+Ln.length+'</div></div>';
+  if(!Ln.length&&!S.credits)h+='<p class="note" style="margin:0 0 12px">Слова можно добавлять и сами, по одному или целой темой, на вкладке «Словарь».</p>';
   h+='<button class="btn primary block" data-act="practice"'+(Ln.length||room?"":" disabled")+'>Учить</button></div>';
   h+='<div class="panel card-task"><div class="meta"><div><h3>Повторение</h3><p class="note">'+(due.length?"Пора повторить, чтобы не забыть":(R.length?(next?"Ближайшее повторение через "+fmtDur(next-Date.now())+" ("+fmtWhen(next)+")"+(R.length>1?". Своё время у каждого слова — см. «Прогресс»":""):""):"Выученные слова появятся здесь"))+'</p></div><div class="big tick">'+due.length+'</div></div>';
   h+='<button class="btn primary block" data-act="review"'+(due.length?"":" disabled")+'>Повторить</button></div>';
@@ -280,7 +280,7 @@ function renderHome(){
 }
 
 /* ---------- quiz ---------- */
-function startQuiz(kind){audioPause();ui={mode:"quiz",kind:kind,recent:[],done:0,ok:0,bad:0,q:null};nextQ()}
+function startQuiz(kind){ui={mode:"quiz",kind:kind,recent:[],done:0,ok:0,bad:0,q:null};nextQ()}
 function pickWord(){
   if(ui.kind==="review"){var d=dueList();return d.length?d[0]:null}
   var Ln=learning();if(!Ln.length)return null;
@@ -424,54 +424,65 @@ function renderIpa(){
   view.innerHTML=h;
 }
 
-/* ---------- audio ---------- */
-var AUDIO_GAP=900,AUDIO_NEXT=1600;
-var audio={playing:false,seq:0,timer:null,order:[],idx:0,current:null,lang:null};
-function audioOrder(){return shuffle(DATA.map(function(d){return d[0]}))}
-function speakLang(text,code,onend){
-  try{
-    var u=new SpeechSynthesisUtterance(text);u.lang=code;u.rate=code==="ru-RU"?.95:.9;
-    u.onend=onend;u.onerror=onend;speechSynthesis.speak(u);
-  }catch(e){onend()}
+/* ---------- dictionary: every word of the language, grouped by topic ---------- */
+var DICT_PAGE=60;
+function sortKey(w){return norm(w).replace(/^(to|de|het|een) /,"")}
+function topicIds(t){
+  if(!t.sorted)t.sorted=t.ids.filter(function(id){return BYID.has(id)}).sort(function(a,b){var x=sortKey(BYID.get(a)[1]),y=sortKey(BYID.get(b)[1]);return x<y?-1:x>y?1:0});
+  return t.sorted;
 }
-function audioStep(seq){
-  if(!audio.playing||seq!==audio.seq)return;
-  if(audio.idx>=audio.order.length){audio.order=audioOrder();audio.idx=0}
-  var d=BYID.get(audio.order[audio.idx++]);
-  audio.current=d;if(ui.mode==="audio")render();
-  speakLang(d[1],L.tts,function(){
-    if(!audio.playing||seq!==audio.seq)return;
-    audio.timer=setTimeout(function(){
-      if(!audio.playing||seq!==audio.seq)return;
-      speakLang(shortRu(d[3]),"ru-RU",function(){
-        if(!audio.playing||seq!==audio.seq)return;
-        audio.timer=setTimeout(function(){audioStep(seq)},AUDIO_NEXT);
-      });
-    },AUDIO_GAP);
+function wordRow(id){
+  var d=BYID.get(id),w=S.words[id];
+  var st=!w?"":(w.s==="R"?'<span class="dst ok" title="Выучено">✓</span>':'<span class="dst" title="В изучении">'+w.c+'/'+w.t+'</span>');
+  return '<button class="drow" data-act="lookup" data-id="'+id+'"><span class="dw"><b>'+esc(d[1])+'</b><span class="muted">'+esc(shortRu(d[3]))+'</span></span>'+st+'</button>';
+}
+function groupStats(ids){var l=0,r=0;ids.forEach(function(id){var w=S.words[id];if(w){if(w.s==="R")r++;else l++}});return{l:l,r:r,fresh:ids.length-l-r}}
+function addGroup(gid){
+  var t=TOPICS.filter(function(x){return x.id===gid})[0];if(!t)return;
+  var n=0;topicIds(t).forEach(function(id){if(!S.words[id]){S.words[id]=newWord();n++}});
+  if(n){dict.added={g:gid,n:n};save()}
+}
+function dictSearch(q){
+  var nq=norm(q).replace(/^(to|de|het) /,""),lq=q.trim().toLowerCase(),out=[];
+  if(!nq&&!lq)return out;
+  DATA.forEach(function(d){
+    var w=sortKey(d[1]),r=d[3].toLowerCase(),score=-1;
+    if(nq&&w.indexOf(nq)===0)score=w===nq?0:1;else if(nq&&w.indexOf(nq)>0)score=2;else if(lq&&r.indexOf(lq)>=0)score=r.indexOf(lq)===0?3:4;
+    if(score>=0)out.push([score,w.length,d[0]]);
   });
+  return out.sort(function(a,b){return a[0]-b[0]||a[1]-b[1]}).slice(0,50).map(function(x){return x[2]});
 }
-function audioPlay(){
-  if(audio.playing)return;
-  if(audio.lang!==lang){audio.order=[];audio.idx=0;audio.current=null;audio.lang=lang}
-  audio.playing=true;audio.seq++;
-  if(!audio.order.length)audio.order=audioOrder();
-  audioStep(audio.seq);render();
+function dictBody(){
+  if(dict.q.trim()){
+    var res=dictSearch(dict.q);
+    return res.length?'<div class="panel dlist">'+res.map(wordRow).join("")+'</div>':'<p class="muted center">Ничего не нашлось.</p>';
+  }
+  var h='';
+  TOPICS.forEach(function(t){
+    var ids=topicIds(t),g=groupStats(ids),open=!!dict.open[t.id];
+    h+='<div class="panel dgroup"><button class="dhead" data-act="dict-group" data-g="'+t.id+'" aria-expanded="'+open+'"><span><b>'+esc(t.name)+'</b><span class="muted small">'+ids.length+' '+plural(ids.length,"слово","слова","слов")+(g.l?' · в изучении '+g.l:'')+(g.r?' · выучено '+g.r:'')+'</span></span><span class="chev" aria-hidden="true">›</span></button>';
+    if(open){
+      h+='<div class="din">';
+      if(dict.added&&dict.added.g===t.id)h+='<p class="note-ok small">Добавлено к изучению: '+dict.added.n+' '+plural(dict.added.n,"слово","слова","слов")+'.</p>';
+      if(!g.fresh)h+='<p class="muted small" style="margin:8px 0">Все слова этой группы уже в изучении или выучены.</p>';
+      else if(dict.arm===t.id)h+='<div class="stack" style="gap:8px;margin:8px 0"><p class="small" style="margin:0">Добавить к изучению '+g.fresh+' '+plural(g.fresh,"новое слово","новых слова","новых слов")+' из группы «'+esc(t.name)+'»? Они сразу попадут в «Учить».</p><div class="row" style="gap:8px"><button class="btn primary" style="flex:1" data-act="dict-add-yes" data-g="'+t.id+'">Добавить</button><button class="btn ghost" style="flex:1" data-act="dict-add-cancel">Отмена</button></div></div>';
+      else h+='<button class="btn block" style="margin:8px 0" data-act="dict-add-all" data-g="'+t.id+'">Добавить всю группу · '+g.fresh+'</button>';
+      var n=dict.shown[t.id]||DICT_PAGE;
+      h+='<div class="dlist">'+ids.slice(0,n).map(wordRow).join("")+'</div>';
+      if(ids.length>n)h+='<button class="btn ghost block" data-act="dict-more" data-g="'+t.id+'">Показать ещё ('+(ids.length-n)+')</button>';
+      h+='</div>';
+    }
+    h+='</div>';
+  });
+  return h;
 }
-function audioPause(){
-  if(!audio.playing)return;
-  audio.playing=false;audio.seq++;clearTimeout(audio.timer);
-  try{speechSynthesis.cancel()}catch(e){}
-  if(ui.mode==="audio")render();
+function plural(n,one,few,many){var a=n%10,b=n%100;return a===1&&b!==11?one:(a>=2&&a<=4&&(b<10||b>=20)?few:many)}
+function renderDict(){
+  view.innerHTML='<div class="stack"><input class="field" id="dq" type="search" placeholder="Поиск: слово или перевод" autocomplete="off" autocorrect="off" autocapitalize="none" spellcheck="false" value="'+esc(dict.q)+'"><div class="stack" id="dbody">'+dictBody()+'</div></div>';
 }
-function renderAudio(){
-  var d=audio.lang===lang?audio.current:null,h='<div class="stack"><div class="panel" style="text-align:center;padding:36px 16px">';
-  h+=d?('<div class="word">'+esc(d[1])+'</div><div class="ipa">'+esc(d[2])+'</div><div class="ru" style="margin-top:10px">'+esc(shortRu(d[3]))+'</div>'):'<p class="lead" style="margin:0">Наденьте наушники и нажмите «Играть» — слова '+L.loc+' и перевод на русском пойдут вперемешку, в случайном порядке.</p>';
-  h+='</div><button class="btn primary block" data-act="'+(audio.playing?"audio-pause":"audio-play")+'">'+(audio.playing?"Пауза":"Играть")+'</button>';
-  h+='<p class="muted small" style="text-align:center;margin:4px 0 0">Отдельный режим для прослушивания — без связи с прогрессом изучения.</p></div>';
-  view.innerHTML=h;
-}
+function dictRefresh(){var b=document.getElementById("dbody");if(b&&ui.mode==="dict")b.innerHTML=dictBody();else render()}
 
-/* ---------- lookup (opened from a synonym) ---------- */
+/* ---------- lookup (a card opened from the dictionary or a synonym) ---------- */
 function renderLookup(){
   var d=BYID.get(ui.id),w=S.words[ui.id];
   var addBtn=!w?'<button class="btn primary block" data-act="lookup-add" data-id="'+d[0]+'">Добавить к изучению</button>'
@@ -483,7 +494,7 @@ function renderLookup(){
 }
 
 /* ---------- routing ---------- */
-var APP_MODES={home:1,stats:1,ipa:1,audio:1};
+var APP_MODES={home:1,dict:1,stats:1,ipa:1};
 function render(){
   var inApp=!!(lang&&S&&(APP_MODES[ui.mode]||ui.mode==="quiz"||ui.mode==="lookup"));
   document.getElementById("tabs").hidden=!inApp||ui.mode==="quiz"||ui.mode==="lookup";
@@ -495,7 +506,7 @@ function render(){
   else if(ui.mode==="loading"||ui.mode==="boot")view.innerHTML='<p class="muted">Загрузка…</p>';
   else if(ui.mode==="fail")view.innerHTML='<div class="panel stack"><h3>Не удалось загрузить словарь</h3><p class="muted small" style="margin:0">Проверьте интернет и попробуйте ещё раз.</p><button class="btn primary block" data-act="retry">Повторить</button></div>';
   else if(!inApp){ui={mode:"auth"};renderAuth()}
-  else if(ui.mode==="home")renderHome();else if(ui.mode==="stats")renderStats();else if(ui.mode==="ipa")renderIpa();else if(ui.mode==="audio")renderAudio();else if(ui.mode==="quiz")renderQuiz();else if(ui.mode==="lookup")renderLookup();
+  else if(ui.mode==="home")renderHome();else if(ui.mode==="stats")renderStats();else if(ui.mode==="ipa")renderIpa();else if(ui.mode==="dict")renderDict();else if(ui.mode==="quiz")renderQuiz();else if(ui.mode==="lookup")renderLookup();
 }
 document.getElementById("tabs").addEventListener("click",function(e){var b=e.target.closest("button");if(!b)return;ui={mode:b.getAttribute("data-tab")};render();window.scrollTo(0,0)});
 view.addEventListener("submit",function(e){if(e.target.id==="authform"){e.preventDefault();submitAuth()}});
@@ -512,8 +523,6 @@ view.addEventListener("click",function(e){
   else if(a==="learn-inline"){var iid=ui.q.intro;if(!S.words[iid]){S.words[iid]=newWord();if(S.credits>0)S.credits--;save()}nextQ()}
   else if(a==="practice")startQuiz("learn");
   else if(a==="review")startQuiz("review");
-  else if(a==="audio-play")audioPlay();
-  else if(a==="audio-pause")audioPause();
   else if(a==="next"){nextQ();window.scrollTo(0,0)}
   else if(a==="pick"){var id=Number(b.getAttribute("data-id"));answer(id===ui.q.id,id)}
   else if(a==="check"){doCheck()}
@@ -528,11 +537,17 @@ view.addEventListener("click",function(e){
   else if(a==="sync")syncNow();
   else if(a==="guard-restore"){pullRemote(lang).then(function(rem){if(rem)adopt(rem);render()},function(){})}
   else if(a==="guard-force"){cloud.allow=true;cloud.state="cloud";push().then(render);render()}
-  else if(a==="lookup"){var lid=Number(b.getAttribute("data-id"));ui={mode:"lookup",id:lid,back:ui};render();window.scrollTo(0,0)}
-  else if(a==="lookup-back"){ui=ui.back||{mode:"home"};render();window.scrollTo(0,0)}
-  else if(a==="lookup-add"){var aid=Number(b.getAttribute("data-id"));if(!S.words[aid]){S.words[aid]=newWord();if(S.credits>0)S.credits--;save()}render()}
+  else if(a==="lookup"){var lid=Number(b.getAttribute("data-id"));if(ui.mode==="dict")dict.scroll=window.scrollY;ui={mode:"lookup",id:lid,back:ui};render();window.scrollTo(0,0)}
+  else if(a==="lookup-back"){ui=ui.back||{mode:"home"};render();window.scrollTo(0,ui.mode==="dict"?dict.scroll:0)}
+  else if(a==="dict-group"){var gid=b.getAttribute("data-g");dict.open[gid]=!dict.open[gid];dict.arm=null;dict.added=null;dictRefresh()}
+  else if(a==="dict-more"){var mg=b.getAttribute("data-g");dict.shown[mg]=(dict.shown[mg]||DICT_PAGE)+DICT_PAGE;dictRefresh()}
+  else if(a==="dict-add-all"){dict.added=null;dict.arm=b.getAttribute("data-g");dictRefresh()}
+  else if(a==="dict-add-cancel"){dict.arm=null;dictRefresh()}
+  else if(a==="dict-add-yes"){addGroup(b.getAttribute("data-g"));dict.arm=null;dictRefresh()}
+  else if(a==="lookup-add"){var aid=Number(b.getAttribute("data-id"));if(!S.words[aid]){S.words[aid]=newWord();save()}render()}
 });
 view.addEventListener("input",function(e){
+  if(e.target.id==="dq"){dict.q=e.target.value;dictRefresh();return}
   if(e.target.id!=="typed"||ui.mode!=="quiz"||!ui.q||ui.q.answered||ui.q.type!=="type")return;
   var d=BYID.get(ui.q.id);if(norm(e.target.value)===norm(d[1]))answer(true,e.target.value,"");
 });
@@ -560,7 +575,7 @@ function checkVersion(){
   return fetch("version.json",{cache:"no-store"}).then(function(r){return r.ok?r.json():null}).then(function(v){
     if(!v||!v.version)return;
     if(!APP_VERSION){APP_VERSION=v.version;return}
-    if(v.version!==APP_VERSION&&ui.mode!=="quiz"&&!audio.playing){if(S)storeLocal();location.reload()}
+    if(v.version!==APP_VERSION&&ui.mode!=="quiz"){if(S)storeLocal();location.reload()}
   }).catch(function(){});
 }
 document.addEventListener("visibilitychange",function(){
