@@ -17,8 +17,8 @@ var MIN_ACTIVE=5,STREAK=3,T_NEW=6,REVIEW_MISSES=2;
 /* ---------- state ---------- */
 var sb=null,user=null,offlineUser=false;
 var lang=null,L=LANGS.en,DATA=[],BYID=new Map(),SG=[],PH=[],IPA=[],IPA_TITLE="",IPA_NOTE="";
-var dataCache={},MERGED={},ALT={},TOPICS=[];
-var dict={open:{},shown:{},q:"",arm:null,scroll:0};
+var dataCache={},MERGED={},ALT={},TOPICS=[],LEVEL=new Map(),LEVELS=[];
+var dict={open:{},shown:{},q:"",arm:null,scroll:0,lv:[]};
 var S=null,ui={mode:"boot"},view=document.getElementById("view");
 var APP_VERSION=null,googleOn=false;
 
@@ -125,9 +125,10 @@ function openLang(code){
   return loadLang(code).then(function(o){
     lang=code;L=LANGS[code];lsSet("lexicon.lang",code);
     DATA=o.dict;TOPICS=o.topics||[{id:"all",name:"Все слова",ids:o.dict.map(function(d){return d[0]})}];IPA=o.ipa;IPA_TITLE=o.ipaTitle;IPA_NOTE=o.ipaNote;MERGED=o.merged||{};ALT=o.altSpell||{};
+    LEVEL=new Map();LEVELS=Object.keys(o.levels||{});LEVELS.forEach(function(k){o.levels[k].forEach(function(id){LEVEL.set(id,k)})});
     BYID=new Map();SG=[];PH=[];
     DATA.forEach(function(d){BYID.set(d[0],d);(d[1].indexOf(" ")>=0?PH:SG).push(d[0])});
-    dict={open:{},shown:{},q:"",arm:null,scroll:0};
+    dict={open:{},shown:{},q:"",arm:null,scroll:0,lv:loadLv()};
     cloud={state:canCloud()?"sync":"local",count:0,allow:false,timer:null,busy:false,again:false,lastSync:0};
     loadLocal();
     ui={mode:"home"};render();window.scrollTo(0,0);
@@ -373,7 +374,7 @@ function renderQuiz(){
       +(q.unlocked?". "+STREAK+" верных ответа — откроется новое слово":"")+(q.floor?". Счётчик вернулся к "+STREAK:"")+(q.reset?". Счётчик сброшен до 0":"")+(q.grad?". Слово выучено, первое повторение "+STAGE_NAMES[0]:"")
       +(q.next?". Следующее повторение через "+fmtDur(q.next):"")
       +(q.warned?". Первая ошибка на повторении: при следующей ошибке подряд слово вернётся в изучение":"")+(q.relapsed?". Вторая ошибка подряд: слово вернулось в изучение, нужно "+T_NEW+" верных ответов":"")+'</div>';
-    h+='<div class="panel">'+wordHead(d)+'<div class="label">Перевод</div><div class="ru">'+esc(d[3])+'</div>'+details(d)+'</div>';
+    h+='<div class="panel">'+wordHead(d)+(LEVEL.get(d[0])?'<div style="margin-top:6px">'+lvTag(d[0])+' <span class="muted small">уровень</span></div>':'')+'<div class="label">Перевод</div><div class="ru">'+esc(d[3])+'</div>'+details(d)+'</div>';
     h+='<button class="btn primary block" data-act="next">Дальше</button>';
   }
   h+='</div>';
@@ -432,14 +433,24 @@ function renderIpa(){
 /* ---------- dictionary: every word of the language, grouped by topic ---------- */
 var DICT_PAGE=60;
 function sortKey(w){return norm(w).replace(/^(to|de|het|een) /,"")}
+/* level filter: an empty list means every level; remembered per language on this device */
+function loadLv(){try{var v=JSON.parse(lsGet("lexicon.lv."+lang)||"[]");return Array.isArray(v)?v.filter(function(l){return LEVELS.indexOf(l)>=0}):[]}catch(e){return []}}
+function lvOk(id){return !dict.lv.length||dict.lv.indexOf(LEVEL.get(id))>=0}
+function lvTag(id){var l=LEVEL.get(id);return l?'<span class="lvl lvl-'+l[0].toLowerCase()+'">'+l+'</span>':''}
+function lvChips(){
+  if(!LEVELS.length)return "";
+  var h='<div class="lvchips" role="group" aria-label="Уровень"><button data-act="dict-lv" data-l="" aria-pressed="'+!dict.lv.length+'">Все</button>';
+  LEVELS.forEach(function(l){h+='<button data-act="dict-lv" data-l="'+l+'" aria-pressed="'+(dict.lv.indexOf(l)>=0)+'">'+l+'</button>'});
+  return h+'</div>';
+}
 function topicIds(t){
   if(!t.sorted)t.sorted=t.ids.filter(function(id){return BYID.has(id)}).sort(function(a,b){var x=sortKey(BYID.get(a)[1]),y=sortKey(BYID.get(b)[1]);return x<y?-1:x>y?1:0});
-  return t.sorted;
+  return dict.lv.length?t.sorted.filter(lvOk):t.sorted;
 }
 function wordRow(id){
   var d=BYID.get(id),w=S.words[id];
   var st=!w?"":(w.s==="R"?'<span class="dst ok" title="Выучено">✓</span>':'<span class="dst" title="В изучении">'+w.c+'/'+w.t+'</span>');
-  return '<button class="drow" data-act="lookup" data-id="'+id+'"><span class="dw"><b>'+esc(d[1])+'</b><span class="muted">'+esc(shortRu(d[3]))+'</span></span>'+st+'</button>';
+  return '<button class="drow" data-act="lookup" data-id="'+id+'"><span class="dw"><b>'+esc(d[1])+'</b><span class="muted">'+esc(shortRu(d[3]))+'</span></span><span class="dtags">'+lvTag(id)+st+'</span></button>';
 }
 function groupStats(ids){var l=0,r=0;ids.forEach(function(id){var w=S.words[id];if(w){if(w.s==="R")r++;else l++}});return{l:l,r:r,fresh:ids.length-l-r}}
 function addGroup(gid){
@@ -453,7 +464,7 @@ function dictSearch(q){
   DATA.forEach(function(d){
     var w=sortKey(d[1]),r=d[3].toLowerCase(),score=-1;
     if(nq&&w.indexOf(nq)===0)score=w===nq?0:1;else if(nq&&w.indexOf(nq)>0)score=2;else if(lq&&r.indexOf(lq)>=0)score=r.indexOf(lq)===0?3:4;
-    if(score>=0)out.push([score,w.length,d[0]]);
+    if(score>=0&&lvOk(d[0]))out.push([score,w.length,d[0]]);
   });
   return out.sort(function(a,b){return a[0]-b[0]||a[1]-b[1]}).slice(0,50).map(function(x){return x[2]});
 }
@@ -463,15 +474,17 @@ function dictBody(){
     return res.length?'<div class="panel dlist">'+res.map(wordRow).join("")+'</div>':'<p class="muted center">Ничего не нашлось.</p>';
   }
   var h='';
+  if(dict.lv.length&&!TOPICS.some(function(t){return topicIds(t).length}))return '<p class="muted center">Слов этого уровня нет.</p>';
   TOPICS.forEach(function(t){
     var ids=topicIds(t),g=groupStats(ids),open=!!dict.open[t.id];
+    if(!ids.length)return;
     h+='<div class="panel dgroup"><button class="dhead" data-act="dict-group" data-g="'+t.id+'" aria-expanded="'+open+'"><span><b>'+esc(t.name)+'</b><span class="muted small">'+ids.length+' '+plural(ids.length,"слово","слова","слов")+(g.l?' · в изучении '+g.l:'')+(g.r?' · выучено '+g.r:'')+'</span></span><span class="chev" aria-hidden="true">›</span></button>';
     if(open){
       h+='<div class="din">';
       if(dict.added&&dict.added.g===t.id)h+='<p class="note-ok small">Добавлено к изучению: '+dict.added.n+' '+plural(dict.added.n,"слово","слова","слов")+'.</p>';
       if(!g.fresh)h+='<p class="muted small" style="margin:8px 0">Все слова этой группы уже в изучении или выучены.</p>';
-      else if(dict.arm===t.id)h+='<div class="stack" style="gap:8px;margin:8px 0"><p class="small" style="margin:0">Добавить к изучению '+g.fresh+' '+plural(g.fresh,"новое слово","новых слова","новых слов")+' из группы «'+esc(t.name)+'»? Они сразу попадут в «Учить».</p><div class="row" style="gap:8px"><button class="btn primary" style="flex:1" data-act="dict-add-yes" data-g="'+t.id+'">Добавить</button><button class="btn ghost" style="flex:1" data-act="dict-add-cancel">Отмена</button></div></div>';
-      else h+='<button class="btn block" style="margin:8px 0" data-act="dict-add-all" data-g="'+t.id+'">Добавить всю группу · '+g.fresh+'</button>';
+      else if(dict.arm===t.id)h+='<div class="stack" style="gap:8px;margin:8px 0"><p class="small" style="margin:0">Добавить к изучению '+g.fresh+' '+plural(g.fresh,"новое слово","новых слова","новых слов")+(dict.lv.length?' уровня '+dict.lv.join(", "):'')+' из группы «'+esc(t.name)+'»? Они сразу попадут в «Учить».</p><div class="row" style="gap:8px"><button class="btn primary" style="flex:1" data-act="dict-add-yes" data-g="'+t.id+'">Добавить</button><button class="btn ghost" style="flex:1" data-act="dict-add-cancel">Отмена</button></div></div>';
+      else h+='<button class="btn block" style="margin:8px 0" data-act="dict-add-all" data-g="'+t.id+'">'+(dict.lv.length?'Добавить все слова '+dict.lv.join(", "):'Добавить всю группу')+' · '+g.fresh+'</button>';
       var n=dict.shown[t.id]||DICT_PAGE;
       h+='<div class="dlist">'+ids.slice(0,n).map(wordRow).join("")+'</div>';
       if(ids.length>n)h+='<button class="btn ghost block" data-act="dict-more" data-g="'+t.id+'">Показать ещё ('+(ids.length-n)+')</button>';
@@ -483,9 +496,9 @@ function dictBody(){
 }
 function plural(n,one,few,many){var a=n%10,b=n%100;return a===1&&b!==11?one:(a>=2&&a<=4&&(b<10||b>=20)?few:many)}
 function renderDict(){
-  view.innerHTML='<div class="stack"><input class="field" id="dq" type="search" placeholder="Поиск: слово или перевод" autocomplete="off" autocorrect="off" autocapitalize="none" spellcheck="false" value="'+esc(dict.q)+'"><div class="stack" id="dbody">'+dictBody()+'</div></div>';
+  view.innerHTML='<div class="stack"><input class="field" id="dq" type="search" placeholder="Поиск: слово или перевод" autocomplete="off" autocorrect="off" autocapitalize="none" spellcheck="false" value="'+esc(dict.q)+'"><div id="dlv">'+lvChips()+'</div><div class="stack" id="dbody">'+dictBody()+'</div></div>';
 }
-function dictRefresh(){var b=document.getElementById("dbody");if(b&&ui.mode==="dict")b.innerHTML=dictBody();else render()}
+function dictRefresh(){var b=document.getElementById("dbody"),c=document.getElementById("dlv");if(b&&ui.mode==="dict"){b.innerHTML=dictBody();if(c)c.innerHTML=lvChips()}else render()}
 
 /* ---------- lookup (a card opened from the dictionary or a synonym) ---------- */
 function renderLookup(){
@@ -493,7 +506,7 @@ function renderLookup(){
   var addBtn=!w?'<button class="btn primary block" data-act="lookup-add" data-id="'+d[0]+'">Добавить к изучению</button>'
     :'<button class="btn block" disabled>'+(w.s==="R"?"Уже выучено":"Уже в изучении")+'</button>';
   var h='<div class="stack"><button class="btn ghost" data-act="lookup-back">← Назад</button>';
-  h+='<div class="panel">'+wordHead(d)+'<div class="label">Перевод</div><div class="ru">'+esc(d[3])+'</div>'+details(d)+'</div>';
+  h+='<div class="panel">'+wordHead(d)+(LEVEL.get(d[0])?'<div style="margin-top:6px">'+lvTag(d[0])+' <span class="muted small">уровень</span></div>':'')+'<div class="label">Перевод</div><div class="ru">'+esc(d[3])+'</div>'+details(d)+'</div>';
   h+=addBtn+'</div>';
   view.innerHTML=h;
 }
@@ -546,6 +559,7 @@ view.addEventListener("click",function(e){
   else if(a==="lookup-back"){ui=ui.back||{mode:"home"};render();window.scrollTo(0,ui.mode==="dict"?dict.scroll:0)}
   else if(a==="dict-group"){var gid=b.getAttribute("data-g");dict.open[gid]=!dict.open[gid];dict.arm=null;dict.added=null;dictRefresh()}
   else if(a==="dict-more"){var mg=b.getAttribute("data-g");dict.shown[mg]=(dict.shown[mg]||DICT_PAGE)+DICT_PAGE;dictRefresh()}
+  else if(a==="dict-lv"){var lv=b.getAttribute("data-l");if(!lv)dict.lv=[];else{var li=dict.lv.indexOf(lv);if(li>=0)dict.lv.splice(li,1);else dict.lv.push(lv);dict.lv.sort()}if(dict.lv.length===LEVELS.length)dict.lv=[];lsSet("lexicon.lv."+lang,JSON.stringify(dict.lv));dict.arm=null;dict.added=null;dict.shown={};dictRefresh()}
   else if(a==="dict-add-all"){dict.added=null;dict.arm=b.getAttribute("data-g");dictRefresh()}
   else if(a==="dict-add-cancel"){dict.arm=null;dictRefresh()}
   else if(a==="dict-add-yes"){addGroup(b.getAttribute("data-g"));dict.arm=null;dictRefresh()}

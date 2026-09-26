@@ -124,3 +124,12 @@ textarea.field{padding:10px 12px;min-height:110px;font-size:13px;font-family:ui-
 .drow .dw .muted{font-size:14px;overflow:hidden;text-overflow:ellipsis;white-space:nowrap}
 .dst{flex:none;padding:2px 8px;border-radius:99px;background:var(--accent-soft);color:var(--accent);font-size:12px;font-weight:600}
 .dst.ok{background:var(--ok-soft);color:var(--ok)}
+/* CEFR level tags and filter */
+.dtags{display:flex;align-items:center;gap:6px;flex:none}
+.lvl{display:inline-block;min-width:28px;text-align:center;padding:1px 6px;border-radius:6px;font-size:12px;font-weight:700;letter-spacing:.02em;border:1px solid currentColor}
+.lvl-a{color:var(--ok)}
+.lvl-b{color:var(--accent)}
+.lvl-c{color:var(--warn)}
+.lvchips{display:flex;flex-wrap:wrap;gap:6px}
+.lvchips button{min-height:36px;padding:0 14px;border-radius:99px;border:1px solid var(--line);background:var(--surface);color:var(--ink);font-weight:600;font-size:14px}
+.lvchips button[aria-pressed="true"]{background:var(--accent);border-color:var(--accent);color:var(--accent-ink)}
