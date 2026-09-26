@@ -5,6 +5,7 @@ Word trainer (Russian speakers learning English and Dutch). Installed on iPhone 
 ## Layout
 - `index.html`, `app.css`, `app.js` — the app, served by GitHub Pages from `main` at https://bermyata.github.io/Lexicon/
 - `data/en.json`, `data/nl.json` — per language `{dict, ipa, ipaTitle, ipaNote, topics, levels}`.
+  `dict` is in frequency order (most used first); new words for learning are taken from the top. Frequency comes from the FrequencyWords 50k lists (OpenSubtitles): a phrase counts as its rarest word and goes no earlier than ~2000th. Insert a new word at its frequency position.
   `dict` rows: `[id, word, ipa, ru, usage, ex1, ex1ru, ex2, ex2ru, synonymIds?, relatedFormIds?]`. Ids are progress keys: never renumber; new words get the next free id.
   `merged` maps a removed id to the card it was folded into (progress moves over); removed ids are never reused.
   A word written `a / b` holds two forms of one word (ze / zij, we / wij, je / jij); typing either counts as correct.
