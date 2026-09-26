@@ -7,6 +7,7 @@ Word trainer (Russian speakers learning English and Dutch). Installed on iPhone 
 - `data/en.json`, `data/nl.json` — per language `{dict, ipa, ipaTitle, ipaNote, topics}`.
   `dict` rows: `[id, word, ipa, ru, usage, ex1, ex1ru, ex2, ex2ru, synonymIds?, relatedFormIds?]`. Ids are progress keys: never renumber; new words get the next free id.
   `merged` maps a removed id to the card it was folded into (progress moves over); removed ids are never reused.
+  A word written `a / b` holds two forms of one word (ze / zij, we / wij, je / jij); typing either counts as correct.
   `altSpell` gives the other spelling of a merged British/American pair (emphasize/emphasise); typing it counts as correct.
   No two cards may share the same Russian translation: the ru→en quiz could not tell them apart.
   `topics` is the Словарь tab: `[{id, name, ids}]`, every dict id in exactly one group (themes first, then leftovers by part of speech). A new word must be added to a group.

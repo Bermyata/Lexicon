@@ -161,7 +161,7 @@ function fmtWhen(t){
   return d.getDate()+" "+MONTHS[d.getMonth()]+" в "+hm;
 }
 function upcoming(){var n=Date.now();return reviewList().filter(function(id){return S.words[id].due>n}).sort(function(a,b){return S.words[a].due-S.words[b].due})}
-function speak(t){try{var u=new SpeechSynthesisUtterance(t);u.lang=L.tts;u.rate=.9;speechSynthesis.cancel();speechSynthesis.speak(u)}catch(e){}}
+function speak(t){try{var u=new SpeechSynthesisUtterance(String(t).replace(/ \/ /g,", "));u.lang=L.tts;u.rate=.9;speechSynthesis.cancel();speechSynthesis.speak(u)}catch(e){}}
 function shuffle(a){for(var i=a.length-1;i>0;i--){var j=Math.random()*(i+1)|0,t=a[i];a[i]=a[j];a[j]=t}return a}
 function newWord(){return{s:"L",c:0,t:T_NEW,st:0,due:0,ok:0,bad:0}}
 
@@ -316,7 +316,12 @@ function nextQ(){
 function norm(s){return String(s).normalize("NFD").replace(/[̀-ͯ]/g,"").toLowerCase().replace(/[’]/g,"'").replace(/[^a-z0-9' -]/g," ").replace(/\s+/g," ").trim()}
 function lev(a,b){var m=a.length,n=b.length,p=[],i,j;for(j=0;j<=n;j++)p[j]=j;for(i=1;i<=m;i++){var prev=p[0];p[0]=i;for(j=1;j<=n;j++){var t=p[j];p[j]=Math.min(p[j]+1,p[j-1]+1,prev+(a[i-1]===b[j-1]?0:1));prev=t}}return p[n]}
 function joined(x){return x.replace(/^(to) /,"").replace(/[\s-]/g,"")}
+/* a card can hold two forms of one word ("ze / zij"): either one counts */
 function checkTyped(word,val){
+  if(word.indexOf(" / ")>=0)return Math.max.apply(null,word.split(" / ").map(function(w){return checkOne(w,val)}));
+  return checkOne(word,val);
+}
+function checkOne(word,val){
   var a=norm(word),b=norm(val);if(!b)return 0;if(a===b)return 1;
   var st=function(x){return L.articles?x.replace(L.articles,""):x};if(st(a)===st(b))return 1;
   if(joined(a)===joined(b))return 3;
@@ -549,7 +554,7 @@ view.addEventListener("click",function(e){
 view.addEventListener("input",function(e){
   if(e.target.id==="dq"){dict.q=e.target.value;dictRefresh();return}
   if(e.target.id!=="typed"||ui.mode!=="quiz"||!ui.q||ui.q.answered||ui.q.type!=="type")return;
-  var d=BYID.get(ui.q.id);if(norm(e.target.value)===norm(d[1]))answer(true,e.target.value,"");
+  var d=BYID.get(ui.q.id);var tv=norm(e.target.value);if(d[1].split(" / ").some(function(w){return norm(w)===tv}))answer(true,e.target.value,"");
 });
 function doCheck(){
   var ti=document.getElementById("typed");if(!ti||!ti.value.trim())return;
