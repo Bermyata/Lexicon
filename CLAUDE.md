@@ -29,3 +29,4 @@ Word trainer (Russian speakers learning English and Dutch). Installed on iPhone 
 6 correct answers to learn; the 3rd unlocks one new word; a mistake below 3 resets to 0, at/after 3 drops back to 3.
 Review: first miss restarts the interval at 4 h, second miss in a row returns the word to learning.
 No cap on words in learning: the Словарь tab adds single words or a whole topic group without spending unlock credits.
+A new-word card offers «Начать учить», «Пропустить» (put off until the next session, no credit spent) and «Изучено» (straight to review, first repeat after 4 h, no credit spent).

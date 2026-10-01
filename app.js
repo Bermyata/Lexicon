@@ -143,7 +143,8 @@ function esc(s){return String(s==null?"":s).replace(/[&<>"]/g,function(c){return
 function learning(){return Object.keys(S.words).filter(function(id){return S.words[id].s==="L"}).map(Number)}
 function dueList(){var n=Date.now();return Object.keys(S.words).filter(function(id){var w=S.words[id];return w.s==="R"&&w.due<=n}).map(Number).sort(function(a,b){return S.words[a].due-S.words[b].due})}
 function reviewList(){return Object.keys(S.words).filter(function(id){return S.words[id].s==="R"}).map(Number)}
-function nextNew(n){var out=[];for(var i=0;i<DATA.length&&out.length<n;i++){if(!S.words[DATA[i][0]])out.push(DATA[i][0])}return out}
+/* skip: words put off with «Пропустить» in this session; they come back next session */
+function nextNew(n,skip){var out=[];for(var i=0;i<DATA.length&&out.length<n;i++){var id=DATA[i][0];if(!S.words[id]&&!(skip&&skip.indexOf(id)>=0))out.push(id)}return out}
 function newRoom(){var n=learning().length;return Math.max(0,S.credits||0,MIN_ACTIVE-n)}
 function variants(ru){return String(ru).split(";").map(function(x){return x.trim().toLowerCase()}).filter(Boolean)}
 function shareVariant(a,b){var va=variants(a),vb=variants(b);return va.some(function(x){return vb.indexOf(x)>=0})}
@@ -165,6 +166,9 @@ function upcoming(){var n=Date.now();return reviewList().filter(function(id){ret
 function speak(t){try{var u=new SpeechSynthesisUtterance(String(t).replace(/ \/ /g,", "));u.lang=L.tts;u.rate=.9;speechSynthesis.cancel();speechSynthesis.speak(u)}catch(e){}}
 function shuffle(a){for(var i=a.length-1;i>0;i--){var j=Math.random()*(i+1)|0,t=a[i];a[i]=a[j];a[j]=t}return a}
 function newWord(){return{s:"L",c:0,t:T_NEW,st:0,due:0,ok:0,bad:0}}
+/* «Изучено» on a new word: straight to review, first repeat after INT[0] like a word learned in the quiz */
+function knownWord(){return{s:"R",c:T_NEW,t:T_NEW,u:1,st:0,m:0,due:Date.now()+INT[0],ok:0,bad:0}}
+function flash(q){return q.flash?'<div class="fb ok">'+esc(q.flash)+'</div><div style="height:12px"></div>':""}
 
 /* ---------- pieces ---------- */
 var ICON_SPK='<svg width="22" height="22" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M11 5 6 9H3v6h3l5 4z"/><path d="M15.5 8.5a5 5 0 0 1 0 7M18.5 5.5a9 9 0 0 1 0 13"/></svg>';
@@ -281,7 +285,7 @@ function renderHome(){
 }
 
 /* ---------- quiz ---------- */
-function startQuiz(kind){ui={mode:"quiz",kind:kind,recent:[],done:0,ok:0,bad:0,q:null};nextQ()}
+function startQuiz(kind){ui={mode:"quiz",kind:kind,recent:[],skip:[],done:0,ok:0,bad:0,q:null};nextQ()}
 function pickWord(){
   if(ui.kind==="review"){var d=dueList();return d.length?d[0]:null}
   var Ln=learning();if(!Ln.length)return null;
@@ -307,7 +311,7 @@ function buildOpts(id){
   return shuffle(opts);
 }
 function nextQ(){
-  if(ui.kind==="learn"&&newRoom()>0){var nn=nextNew(1);if(nn.length){ui.q={intro:nn[0]};render();window.scrollTo(0,0);return}}
+  if(ui.kind==="learn"&&newRoom()>0){var nn=nextNew(1,ui.skip);if(nn.length){ui.q={intro:nn[0]};render();window.scrollTo(0,0);return}}
   var id=pickWord();
   if(id==null){ui.q=null;render();return}
   var t=qType(id),q={id:id,type:t,answered:false};
@@ -349,8 +353,8 @@ function renderQuiz(){
     var msg=ui.kind==="review"?"Все повторения на сейчас пройдены.":"Слов для тренировки больше нет.";
     view.innerHTML=top+'<div class="panel stack"><h2>Сессия окончена</h2><p class="lead" style="margin:0">'+msg+' Верных ответов: '+ui.ok+', ошибок: '+ui.bad+'.</p><button class="btn primary block" data-act="home">На главную</button></div>';return;
   }
-  if(q.intro){var di=BYID.get(q.intro);view.innerHTML=top+'<div class="fb info">Открывается новое слово</div><div style="height:12px"></div><div class="panel">'+wordHead(di)+'<div class="label">Перевод</div><div class="ru">'+esc(di[3])+'</div>'+details(di)+'</div><div style="height:12px"></div><button class="btn primary block" data-act="learn-inline">Начать учить</button>';return}
-  var d=BYID.get(q.id),w=S.words[q.id],h=top+'<div class="stack">';
+  if(q.intro){var di=BYID.get(q.intro);view.innerHTML=top+flash(q)+'<div class="fb info">Открывается новое слово</div><div style="height:12px"></div><div class="panel">'+wordHead(di)+'<div class="label">Перевод</div><div class="ru">'+esc(di[3])+'</div>'+details(di)+'</div><div style="height:12px"></div><button class="btn primary block" data-act="learn-inline">Начать учить</button><div class="row" style="margin-top:10px"><button class="btn grow" data-act="learn-skip">Пропустить</button><button class="btn grow" data-act="learn-known">Изучено</button></div>';return}
+  var d=BYID.get(q.id),w=S.words[q.id],h=top+flash(q)+'<div class="stack">';
   h+='<div class="panel prompt">';
   h+='<div class="row wrap" style="margin-bottom:10px"><span class="small muted">'+(w.s==="L"?"Изучение · "+w.c+" из "+w.t+(w.u?"":" · новое слово после "+STREAK):"Повторение"+(w.m?" · была ошибка":""))+'</span>'+(w.s==="L"?dots(w):"")+'</div>';
   if(q.type==="en-ru"){h+='<div class="small muted" style="margin-bottom:6px">Выберите перевод</div>'+wordHead(d)}
@@ -539,6 +543,8 @@ view.addEventListener("click",function(e){
   else if(a==="signout")signOut();
   else if(a==="home"){ui={mode:"home"};render()}
   else if(a==="learn-inline"){var iid=ui.q.intro;if(!S.words[iid]){S.words[iid]=newWord();if(S.credits>0)S.credits--;save()}nextQ()}
+  else if(a==="learn-skip"){var sid=ui.q.intro;ui.skip.push(sid);nextQ();if(ui.q)ui.q.flash="«"+BYID.get(sid)[1]+"» пропущено — вернётся в следующей сессии";render()}
+  else if(a==="learn-known"){var kid=ui.q.intro;if(!S.words[kid]){S.words[kid]=knownWord();save()}nextQ();if(ui.q)ui.q.flash="«"+BYID.get(kid)[1]+"» — в изученных, повторение "+STAGE_NAMES[0];render()}
   else if(a==="practice")startQuiz("learn");
   else if(a==="review")startQuiz("review");
   else if(a==="next"){nextQ();window.scrollTo(0,0)}
