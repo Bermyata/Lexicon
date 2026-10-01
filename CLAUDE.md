@@ -5,7 +5,7 @@ Word trainer (Russian speakers learning English and Dutch). Installed on iPhone 
 ## Layout
 - `index.html`, `app.css`, `app.js` — the app, served by GitHub Pages from `main` at https://bermyata.github.io/Lexicon/
 - `data/en.json`, `data/nl.json` — per language `{dict, ipa, ipaTitle, ipaNote, topics, levels}`.
-  `dict` is in frequency order (most used first); new words for learning are taken from the top. Frequency comes from the FrequencyWords 50k lists (OpenSubtitles): a phrase counts as its rarest word and goes no earlier than ~2000th. Insert a new word at its frequency position.
+  `dict` is in frequency order (most used first); new words for learning are taken from the top. Frequency comes from the FrequencyWords 50k lists (OpenSubtitles): a phrase counts as its rarest word and goes no earlier than ~2000th; an inflected form counts toward a word only when no other card owns it (singing is sing's, not singe's), and subtitle stage-direction sounds ([sighs], [groaning]) count only by their own form. Insert a new word at its frequency position.
   `dict` rows: `[id, word, ipa, ru, usage, ex1, ex1ru, ex2, ex2ru, synonymIds?, relatedFormIds?]`. Ids are progress keys: never renumber; new words get the next free id.
   `merged` maps a removed id to the card it was folded into (progress moves over); removed ids are never reused.
   A word written `a / b` holds two forms of one word (ze / zij, we / wij, je / jij); typing either counts as correct.
@@ -26,7 +26,8 @@ Word trainer (Russian speakers learning English and Dutch). Installed on iPhone 
 - The publishable key in `app.js` is public by design; never commit a secret/service_role key.
 
 ## Learning rules (app.js)
-6 correct answers to learn; the 3rd unlocks one new word; a mistake below 3 resets to 0, at/after 3 drops back to 3.
+6 correct answers to learn; a mistake below 3 resets to 0, at/after 3 drops back to 3.
+New words come by level slots: the dictionary's top level keeps 2 words in learning, each level below one more (en: C2 2, C1 3, B2 4, B1 5, A2 6, A1 7; nl: B1 2, A2 3, A1 4). The next new word is the most frequent unseen one whose level has a free slot; it is shown at once while fewer than 5 words are in learning, otherwise one every 3 answers.
 Review: first miss restarts the interval at 4 h, second miss in a row returns the word to learning.
-No cap on words in learning: the Словарь tab adds single words or a whole topic group without spending unlock credits.
-A new-word card offers «Начать учить», «Пропустить» (put off until the next session, no credit spent) and «Изучено» (straight to review, first repeat after 4 h, no credit spent).
+The Словарь tab adds single words or a whole topic group on top of the slots (they count toward their level's slot).
+A new-word card offers «Начать учить», «Пропустить» (put off until the next session) and «Изучено» (straight to review, first repeat after 4 h; the slot stays free for the next word).

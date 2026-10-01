@@ -12,7 +12,7 @@ var LANG_ORDER=["en","nl"];
 var H=3600e3;
 var INT=[4,12,24,144,288,576,1152,2304,4320].map(function(h){return h*H});
 var STAGE_NAMES=["через 4 ч","через 12 ч","через 1 день","через 6 дней","через 12 дней","через 24 дня","через 48 дней","через 96 дней","через 180 дней"];
-var MIN_ACTIVE=5,STREAK=3,T_NEW=6,REVIEW_MISSES=2;
+var MIN_ACTIVE=5,NEW_EVERY=3,STREAK=3,T_NEW=6,REVIEW_MISSES=2;
 
 /* ---------- state ---------- */
 var sb=null,user=null,offlineUser=false;
@@ -125,7 +125,7 @@ function openLang(code){
   return loadLang(code).then(function(o){
     lang=code;L=LANGS[code];lsSet("lexicon.lang",code);
     DATA=o.dict;TOPICS=o.topics||[{id:"all",name:"Все слова",ids:o.dict.map(function(d){return d[0]})}];IPA=o.ipa;IPA_TITLE=o.ipaTitle;IPA_NOTE=o.ipaNote;MERGED=o.merged||{};ALT=o.altSpell||{};
-    LEVEL=new Map();LEVELS=Object.keys(o.levels||{});LEVELS.forEach(function(k){o.levels[k].forEach(function(id){LEVEL.set(id,k)})});
+    LEVEL=new Map();LEVELS=Object.keys(o.levels||{}).sort();LEVELS.forEach(function(k){o.levels[k].forEach(function(id){LEVEL.set(id,k)})});
     BYID=new Map();SG=[];PH=[];
     DATA.forEach(function(d){BYID.set(d[0],d);(d[1].indexOf(" ")>=0?PH:SG).push(d[0])});
     dict={open:{},shown:{},q:"",arm:null,scroll:0,lv:loadLv()};
@@ -143,9 +143,15 @@ function esc(s){return String(s==null?"":s).replace(/[&<>"]/g,function(c){return
 function learning(){return Object.keys(S.words).filter(function(id){return S.words[id].s==="L"}).map(Number)}
 function dueList(){var n=Date.now();return Object.keys(S.words).filter(function(id){var w=S.words[id];return w.s==="R"&&w.due<=n}).map(Number).sort(function(a,b){return S.words[a].due-S.words[b].due})}
 function reviewList(){return Object.keys(S.words).filter(function(id){return S.words[id].s==="R"}).map(Number)}
-/* skip: words put off with «Пропустить» in this session; they come back next session */
-function nextNew(n,skip){var out=[];for(var i=0;i<DATA.length&&out.length<n;i++){var id=DATA[i][0];if(!S.words[id]&&!(skip&&skip.indexOf(id)>=0))out.push(id)}return out}
-function newRoom(){var n=learning().length;return Math.max(0,S.credits||0,MIN_ACTIVE-n)}
+/* learning slots per level: the dictionary's top level keeps 2 words in learning, each level below one more (C2 2, C1 3 … A1 7) */
+function quota(l){var i=LEVELS.indexOf(l);return i<0?0:2+LEVELS.length-1-i}
+function levelLoad(){var n={};learning().forEach(function(id){var l=LEVEL.get(id);n[l]=(n[l]||0)+1});return n}
+/* next new word: the most frequent unseen word whose level has a free slot; skip = words put off with «Пропустить» this session */
+function nextNew(skip){
+  var n=levelLoad();
+  for(var i=0;i<DATA.length;i++){var id=DATA[i][0];if(S.words[id]||(skip&&skip.indexOf(id)>=0))continue;var l=LEVEL.get(id);if((n[l]||0)<quota(l))return id}
+  return null;
+}
 function variants(ru){return String(ru).split(";").map(function(x){return x.trim().toLowerCase()}).filter(Boolean)}
 function shareVariant(a,b){var va=variants(a),vb=variants(b);return va.some(function(x){return vb.indexOf(x)>=0})}
 function shortRu(ru){return String(ru).split(";")[0].trim()}
@@ -272,12 +278,13 @@ function renderPick(){
 }
 function renderHome(){
   rollDay();
-  var Ln=learning(),due=dueList(),room=newRoom(),R=reviewList();
+  var Ln=learning(),due=dueList(),room=nextNew(),load=levelLoad(),R=reviewList();
   var next=null;R.forEach(function(id){var w=S.words[id];if(w.due>Date.now()&&(next===null||w.due<next))next=w.due});
   var h='<div class="stack">'+langSwitch()+guardHtml();
-  h+='<div class="panel card-task"><div class="meta"><div><h3>В изучении</h3><p class="note">Нужно '+T_NEW+' верных ответов, чтобы слово считалось выученным. После '+STREAK+'-го открывается новое слово</p></div><div class="big tick">'+Ln.length+'</div></div>';
-  if(!Ln.length&&!S.credits)h+='<p class="note" style="margin:0 0 12px">Слова можно добавлять и сами, по одному или целой темой, на вкладке «Словарь».</p>';
-  h+='<button class="btn primary block" data-act="practice"'+(Ln.length||room?"":" disabled")+'>Учить</button></div>';
+  h+='<div class="panel card-task"><div class="meta"><div><h3>В изучении</h3><p class="note">Нужно '+T_NEW+' верных ответов, чтобы слово считалось выученным. Новые слова приходят сами, по частоте, пока на уровне есть свободные места: на верхнем уровне 2 слова, на каждом ниже на одно больше</p></div><div class="big tick">'+Ln.length+'</div></div>';
+  h+='<p class="note" style="margin:0 0 12px">'+LEVELS.slice().reverse().map(function(l){return l+" "+(load[l]||0)+"/"+quota(l)}).join(" · ")+'</p>';
+  if(!Ln.length&&room==null)h+='<p class="note" style="margin:0 0 12px">Слова можно добавлять и сами, по одному или целой темой, на вкладке «Словарь».</p>';
+  h+='<button class="btn primary block" data-act="practice"'+(Ln.length||room!=null?"":" disabled")+'>Учить</button></div>';
   h+='<div class="panel card-task"><div class="meta"><div><h3>Повторение</h3><p class="note">'+(due.length?"Пора повторить, чтобы не забыть":(R.length?(next?"Ближайшее повторение через "+fmtDur(next-Date.now())+" ("+fmtWhen(next)+")"+(R.length>1?". Своё время у каждого слова — см. «Прогресс»":""):""):"Выученные слова появятся здесь"))+'</p></div><div class="big tick">'+due.length+'</div></div>';
   h+='<button class="btn primary block" data-act="review"'+(due.length?"":" disabled")+'>Повторить</button></div>';
   h+='</div>';
@@ -285,7 +292,7 @@ function renderHome(){
 }
 
 /* ---------- quiz ---------- */
-function startQuiz(kind){ui={mode:"quiz",kind:kind,recent:[],skip:[],done:0,ok:0,bad:0,q:null};nextQ()}
+function startQuiz(kind){ui={mode:"quiz",kind:kind,recent:[],skip:[],sinceNew:NEW_EVERY,done:0,ok:0,bad:0,q:null};nextQ()}
 function pickWord(){
   if(ui.kind==="review"){var d=dueList();return d.length?d[0]:null}
   var Ln=learning();if(!Ln.length)return null;
@@ -311,7 +318,8 @@ function buildOpts(id){
   return shuffle(opts);
 }
 function nextQ(){
-  if(ui.kind==="learn"&&newRoom()>0){var nn=nextNew(1,ui.skip);if(nn.length){ui.q={intro:nn[0]};render();window.scrollTo(0,0);return}}
+  /* new words come in between questions: right away while fewer than MIN_ACTIVE are in learning, then one per NEW_EVERY answers */
+  if(ui.kind==="learn"&&(learning().length<MIN_ACTIVE||ui.sinceNew>=NEW_EVERY)){var nn=nextNew(ui.skip);if(nn!=null){ui.sinceNew=0;ui.q={intro:nn};render();window.scrollTo(0,0);return}}
   var id=pickWord();
   if(id==null){ui.q=null;render();return}
   var t=qType(id),q={id:id,type:t,answered:false};
@@ -336,14 +344,14 @@ function answer(correct,given,note){
   var q=ui.q,w=S.words[q.id];q.answered=true;q.correct=correct;q.given=given;q.note=note||"";ui.done++;
   if(correct){
     ui.ok++;w.ok++;
-    if(w.s==="L"){w.c++;if(w.c>=STREAK&&!w.u){w.u=1;S.credits++;q.unlocked=true}if(w.c>=w.t){w.s="R";w.st=0;w.m=0;w.due=Date.now()+INT[0];q.grad=true}}
+    if(w.s==="L"){w.c++;if(w.c>=w.t){w.s="R";w.st=0;w.m=0;w.due=Date.now()+INT[0];q.grad=true}}
     else{w.m=0;w.st=Math.min(w.st+1,8);w.due=Date.now()+INT[w.st];q.next=INT[w.st]}
   }else{
     ui.bad++;w.bad++;
     if(w.s==="L"){if(w.c>=STREAK){w.c=STREAK;q.floor=true}else{q.reset=w.c>0;w.c=0}}
     else{w.m=(w.m||0)+1;if(w.m>=REVIEW_MISSES){w.s="L";w.c=0;w.u=0;w.m=0;w.t=T_NEW;w.st=0;w.due=0;q.relapsed=true}else{w.st=0;w.due=Date.now()+INT[0];q.warned=true}}
   }
-  ui.recent.push(q.id);save();render();
+  ui.recent.push(q.id);ui.sinceNew++;save();render();
   if(correct)speak(BYID.get(q.id)[1]);
 }
 function renderQuiz(){
@@ -353,10 +361,10 @@ function renderQuiz(){
     var msg=ui.kind==="review"?"Все повторения на сейчас пройдены.":"Слов для тренировки больше нет.";
     view.innerHTML=top+'<div class="panel stack"><h2>Сессия окончена</h2><p class="lead" style="margin:0">'+msg+' Верных ответов: '+ui.ok+', ошибок: '+ui.bad+'.</p><button class="btn primary block" data-act="home">На главную</button></div>';return;
   }
-  if(q.intro){var di=BYID.get(q.intro);view.innerHTML=top+flash(q)+'<div class="fb info">Открывается новое слово</div><div style="height:12px"></div><div class="panel">'+wordHead(di)+'<div class="label">Перевод</div><div class="ru">'+esc(di[3])+'</div>'+details(di)+'</div><div style="height:12px"></div><button class="btn primary block" data-act="learn-inline">Начать учить</button><div class="row" style="margin-top:10px"><button class="btn grow" data-act="learn-skip">Пропустить</button><button class="btn grow" data-act="learn-known">Изучено</button></div>';return}
+  if(q.intro){var di=BYID.get(q.intro);view.innerHTML=top+flash(q)+'<div class="fb info">Открывается новое слово</div><div style="height:12px"></div><div class="panel">'+wordHead(di)+(LEVEL.get(di[0])?'<div style="margin-top:6px">'+lvTag(di[0])+' <span class="muted small">уровень</span></div>':'')+'<div class="label">Перевод</div><div class="ru">'+esc(di[3])+'</div>'+details(di)+'</div><div style="height:12px"></div><button class="btn primary block" data-act="learn-inline">Начать учить</button><div class="row" style="margin-top:10px"><button class="btn grow" data-act="learn-skip">Пропустить</button><button class="btn grow" data-act="learn-known">Изучено</button></div>';return}
   var d=BYID.get(q.id),w=S.words[q.id],h=top+flash(q)+'<div class="stack">';
   h+='<div class="panel prompt">';
-  h+='<div class="row wrap" style="margin-bottom:10px"><span class="small muted">'+(w.s==="L"?"Изучение · "+w.c+" из "+w.t+(w.u?"":" · новое слово после "+STREAK):"Повторение"+(w.m?" · была ошибка":""))+'</span>'+(w.s==="L"?dots(w):"")+'</div>';
+  h+='<div class="row wrap" style="margin-bottom:10px"><span class="small muted">'+(w.s==="L"?"Изучение · "+w.c+" из "+w.t:"Повторение"+(w.m?" · была ошибка":""))+'</span>'+(w.s==="L"?dots(w):"")+'</div>';
   if(q.type==="en-ru"){h+='<div class="small muted" style="margin-bottom:6px">Выберите перевод</div>'+wordHead(d)}
   else if(q.type==="ru-en"){h+='<div class="small muted" style="margin-bottom:6px">Выберите '+L.adj+' слово</div><div class="ru" style="font-size:24px">'+esc(d[3])+'</div>'}
   else{h+='<div class="small muted" style="margin-bottom:6px">Напишите '+L.adv+'</div><div class="ru" style="font-size:24px">'+esc(d[3])+'</div>'}
@@ -375,7 +383,7 @@ function renderQuiz(){
   if(q.answered){
     var okc=q.correct;
     h+='<div class="fb '+(okc?"ok":"bad")+'">'+(okc?"Верно":"Неверно")+(q.note?" — "+esc(q.note):"")
-      +(q.unlocked?". "+STREAK+" верных ответа — откроется новое слово":"")+(q.floor?". Счётчик вернулся к "+STREAK:"")+(q.reset?". Счётчик сброшен до 0":"")+(q.grad?". Слово выучено, первое повторение "+STAGE_NAMES[0]:"")
+      +(q.floor?". Счётчик вернулся к "+STREAK:"")+(q.reset?". Счётчик сброшен до 0":"")+(q.grad?". Слово выучено, первое повторение "+STAGE_NAMES[0]:"")
       +(q.next?". Следующее повторение через "+fmtDur(q.next):"")
       +(q.warned?". Первая ошибка на повторении: при следующей ошибке подряд слово вернётся в изучение":"")+(q.relapsed?". Вторая ошибка подряд: слово вернулось в изучение, нужно "+T_NEW+" верных ответов":"")+'</div>';
     h+='<div class="panel">'+wordHead(d)+(LEVEL.get(d[0])?'<div style="margin-top:6px">'+lvTag(d[0])+' <span class="muted small">уровень</span></div>':'')+'<div class="label">Перевод</div><div class="ru">'+esc(d[3])+'</div>'+details(d)+'</div>';
@@ -542,9 +550,9 @@ view.addEventListener("click",function(e){
   else if(a==="google")googleLogin();
   else if(a==="signout")signOut();
   else if(a==="home"){ui={mode:"home"};render()}
-  else if(a==="learn-inline"){var iid=ui.q.intro;if(!S.words[iid]){S.words[iid]=newWord();if(S.credits>0)S.credits--;save()}nextQ()}
-  else if(a==="learn-skip"){var sid=ui.q.intro;ui.skip.push(sid);nextQ();if(ui.q)ui.q.flash="«"+BYID.get(sid)[1]+"» пропущено — вернётся в следующей сессии";render()}
-  else if(a==="learn-known"){var kid=ui.q.intro;if(!S.words[kid]){S.words[kid]=knownWord();save()}nextQ();if(ui.q)ui.q.flash="«"+BYID.get(kid)[1]+"» — в изученных, повторение "+STAGE_NAMES[0];render()}
+  else if(a==="learn-inline"){var iid=ui.q.intro;if(!S.words[iid]){S.words[iid]=newWord();save()}nextQ()}
+  else if(a==="learn-skip"){var sid=ui.q.intro;ui.skip.push(sid);ui.sinceNew=NEW_EVERY;nextQ();if(ui.q)ui.q.flash="«"+BYID.get(sid)[1]+"» пропущено — вернётся в следующей сессии";render()}
+  else if(a==="learn-known"){var kid=ui.q.intro;if(!S.words[kid]){S.words[kid]=knownWord();save()}ui.sinceNew=NEW_EVERY;nextQ();if(ui.q)ui.q.flash="«"+BYID.get(kid)[1]+"» — в изученных, повторение "+STAGE_NAMES[0];render()}
   else if(a==="practice")startQuiz("learn");
   else if(a==="review")startQuiz("review");
   else if(a==="next"){nextQ();window.scrollTo(0,0)}
