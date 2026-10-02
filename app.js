@@ -17,7 +17,7 @@ var MIN_ACTIVE=5,NEW_EVERY=3,STREAK=3,T_NEW=6,REVIEW_MISSES=2;
 /* ---------- state ---------- */
 var sb=null,user=null,offlineUser=false;
 var lang=null,L=LANGS.en,DATA=[],BYID=new Map(),SG=[],PH=[],IPA=[],IPA_TITLE="",IPA_NOTE="";
-var dataCache={},MERGED={},ALT={},TOPICS=[],LEVEL=new Map(),LEVELS=[];
+var dataCache={},MERGED={},ALT={},FORMS={},TOPICS=[],LEVEL=new Map(),LEVELS=[];
 var dict={open:{},shown:{},q:"",arm:null,scroll:0,lv:[]};
 var S=null,ui={mode:"boot"},view=document.getElementById("view");
 var APP_VERSION=null,googleOn=false;
@@ -124,7 +124,7 @@ function openLang(code){
   ui={mode:"loading"};render();
   return loadLang(code).then(function(o){
     lang=code;L=LANGS[code];lsSet("lexicon.lang",code);
-    DATA=o.dict;TOPICS=o.topics||[{id:"all",name:"Все слова",ids:o.dict.map(function(d){return d[0]})}];IPA=o.ipa;IPA_TITLE=o.ipaTitle;IPA_NOTE=o.ipaNote;MERGED=o.merged||{};ALT=o.altSpell||{};
+    DATA=o.dict;TOPICS=o.topics||[{id:"all",name:"Все слова",ids:o.dict.map(function(d){return d[0]})}];IPA=o.ipa;IPA_TITLE=o.ipaTitle;IPA_NOTE=o.ipaNote;MERGED=o.merged||{};ALT=o.altSpell||{};FORMS=o.forms||{};
     LEVEL=new Map();LEVELS=Object.keys(o.levels||{}).sort();LEVELS.forEach(function(k){o.levels[k].forEach(function(id){LEVEL.set(id,k)})});
     BYID=new Map();SG=[];PH=[];
     DATA.forEach(function(d){BYID.set(d[0],d);(d[1].indexOf(" ")>=0?PH:SG).push(d[0])});
@@ -180,7 +180,8 @@ function flash(q){return q.flash?'<div class="fb ok">'+esc(q.flash)+'</div><div 
 var ICON_SPK='<svg width="22" height="22" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M11 5 6 9H3v6h3l5 4z"/><path d="M15.5 8.5a5 5 0 0 1 0 7M18.5 5.5a9 9 0 0 1 0 13"/></svg>';
 function wordHead(d){return '<div class="row" style="align-items:flex-start"><div><div class="word">'+esc(d[1])+'</div><div class="ipa">'+esc(d[2])+'</div></div><button class="btn icon" data-act="speak" data-t="'+esc(d[1])+'" aria-label="Произнести">'+ICON_SPK+'</button></div>'}
 function details(d){
-  var h='<div class="label">Контекст использования</div><p style="margin:0">'+esc(d[4])+'</p>';
+  var h=FORMS[d[0]]?'<div class="label">Формы глагола</div><p style="margin:0"><b>'+esc(FORMS[d[0]])+'</b></p>':'';
+  h+='<div class="label">Контекст использования</div><p style="margin:0">'+esc(d[4])+'</p>';
   if(d[9]&&d[9].length){
     h+='<div class="label">Синонимы</div><div class="row wrap" style="gap:8px">';
     h+=d[9].map(function(sid){var s=BYID.get(sid);return s?'<button class="btn" data-act="lookup" data-id="'+sid+'">'+esc(s[1])+'</button>':''}).join("");
