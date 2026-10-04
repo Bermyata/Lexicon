@@ -339,7 +339,14 @@ function checkOne(word,val){
   var a=norm(word),b=norm(val);if(!b)return 0;if(a===b)return 1;
   var st=function(x){return L.articles?x.replace(L.articles,""):x};if(st(a)===st(b))return 1;
   if(joined(a)===joined(b))return 3;
+  if(slotRe(st(a)).test(st(b)))return 1;
   if(a.length>=7&&lev(st(a),st(b))<=1)return 2;return 0;
+}
+/* "to brush one's teeth" also accepts "brush my teeth", "to keep someone posted" accepts "keep you posted" */
+var SLOTS={"someone's":"(?:someone's|somebody's|my|your|his|her|its|our|their)","one's":"(?:one's|my|your|his|her|its|our|their)","oneself":"(?:oneself|myself|yourself|himself|herself|itself|ourselves|yourselves|themselves)","someone":"(?:someone|somebody|me|you|him|her|it|us|them)"};
+function slotRe(a){
+  var hit=false,re=a.split(" ").map(function(t){if(SLOTS[t]){hit=true;return SLOTS[t]}return t.replace(/[.*+?^${}()|[\]\\]/g,"\\$&")}).join(" ");
+  return hit?new RegExp("^"+re+"$"):/$^/;
 }
 function answer(correct,given,note){
   var q=ui.q,w=S.words[q.id];q.answered=true;q.correct=correct;q.given=given;q.note=note||"";ui.done++;
