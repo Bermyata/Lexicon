@@ -595,7 +595,7 @@ view.addEventListener("input",function(e){
 function doCheck(){
   var ti=document.getElementById("typed");if(!ti||!ti.value.trim())return;
   var d=BYID.get(ui.q.id),r=checkTyped(d[1],ti.value);
-  if(ALT[d[0]]&&norm(ti.value)===norm(ALT[d[0]])){answer(true,ti.value,"британское написание, тоже верно (в словаре американское: «"+d[1]+"»)");return}
+  if(ALT[d[0]]&&checkOne(ALT[d[0]],ti.value)===1){answer(true,ti.value,"британское написание, тоже верно (в словаре американское: «"+d[1]+"»)");return}
   if(r===3){
     /* only the spacing/hyphen differs: wrong if that spelling is a different word in the dictionary */
     var b=norm(ti.value),other=(d[10]||[]).map(function(id){return BYID.get(id)}).filter(function(x){return x&&norm(x[1]).replace(/^to /,"")===b.replace(/^to /,"")})[0];
