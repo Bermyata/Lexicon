@@ -13,6 +13,7 @@ Word trainer (Russian speakers learning English and Dutch). Installed on iPhone 
   `altSpell` gives the other spelling of a merged British/American pair (emphasize/emphasise); typing it counts as correct.
   No two cards may share the same Russian translation: the ru→en quiz could not tell them apart.
   `topics` is the Словарь tab: `[{id, name, ids}]`, every dict id in exactly one group (themes first, then leftovers by part of speech). A new word must be added to a group.
+  The first English group, `pro` (Professional), holds engineering terms: electrical, heat tracing, design documents, project planning and site safety.
   `levels` maps a CEFR level to ids (`{"A1":[...],...}`), every dict id exactly once; shown as a tag and used by the Словарь level filter.
   English levels come from the CEFR-J vocabulary profile (A1–B2) and the Octanove C1/C2 profile (CC BY-SA 4.0, github.com/openlanguageprofiles/olp-en-cefrj); words missing there and phrases are estimated from word frequency. Dutch levels (A1–B1) are estimated from frequency. A new word needs a level.
   `forms` (English) maps a verb card id to "base · past · participle" of its head verb (to give up → give · gave · given), shown as «Формы глагола»; regenerate after adding verbs (irregular table + spelling rules); "to" cards that are not verbs (to date, to this day) get none.
