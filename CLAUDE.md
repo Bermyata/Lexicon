@@ -17,6 +17,7 @@ Word trainer (Russian speakers learning English and Dutch). Installed on iPhone 
   `levels` maps a CEFR level to ids (`{"A1":[...],...}`), every dict id exactly once; shown as a tag and used by the Словарь level filter.
   English levels come from the CEFR-J vocabulary profile (A1–B2) and the Octanove C1/C2 profile (CC BY-SA 4.0, github.com/openlanguageprofiles/olp-en-cefrj); words missing there and phrases are estimated from word frequency. Dutch levels (A1–B1) are estimated from frequency. A new word needs a level.
   `forms` (English) maps a verb card id to "base · past · participle" of its head verb (to give up → give · gave · given), shown as «Формы глагола»; regenerate after adding verbs (irregular table + spelling rules); "to" cards that are not verbs (to date, to this day) get none.
+  Dutch `forms` give "infinitive · past sg/past pl · heeft/is participle" (gaan · ging/gingen · is gegaan; separable: weggaan · ging weg/gingen weg · is weggegaan) for single-word verb cards and `zich` verbs; regenerate after adding verbs (strong-verb table, 't kofschip, prefixes, zijn-verbs list).
   `relatedFormIds` links spellings of one word that are different words (follow up / follow-up, take over / takeover); shown as «Не путать с», and typing the linked form counts as wrong.
 - `vendor/supabase.js` — supabase-js UMD build (2.117.0), vendored so the app works offline.
 - `sw.js` — service worker, network-first with cache fallback.
