@@ -33,5 +33,5 @@ Word trainer (Russian speakers learning English and Dutch). Installed on iPhone 
 6 correct answers to learn; a mistake below 3 resets to 0, at/after 3 drops back to 3.
 New words come by level slots: the dictionary's top level keeps 2 words in learning, each level below one more (en: C2 2, C1 3, B2 4, B1 5, A2 6, A1 7; nl: B1 2, A2 3, A1 4). The next new word is the most frequent unseen one whose level has a free slot; it is shown at once while fewer than 5 words are in learning, otherwise one every 3 answers.
 Review: first miss restarts the interval at 4 h, second miss in a row returns the word to learning.
-The Словарь tab adds single words or a whole topic group on top of the slots (they count toward their level's slot).
+The Словарь tab adds single words or a whole topic group on top of the slots (they count toward their level's slot). A word opened from Словарь also has «Изучено» (unseen or in learning → straight to review, first repeat after 4 h).
 A new-word card offers «Начать учить», «Пропустить» (put off until the next session) and «Изучено» (straight to review, first repeat after 4 h; the slot stays free for the next word).

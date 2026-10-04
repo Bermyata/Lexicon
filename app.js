@@ -523,8 +523,11 @@ function dictRefresh(){var b=document.getElementById("dbody"),c=document.getElem
 /* ---------- lookup (a card opened from the dictionary or a synonym) ---------- */
 function renderLookup(){
   var d=BYID.get(ui.id),w=S.words[ui.id];
-  var addBtn=!w?'<button class="btn primary block" data-act="lookup-add" data-id="'+d[0]+'">Добавить к изучению</button>'
-    :'<button class="btn block" disabled>'+(w.s==="R"?"Уже выучено":"Уже в изучении")+'</button>';
+  var known='<button class="btn grow" data-act="lookup-known" data-id="'+d[0]+'">Изучено</button>';
+  var addBtn=!w?'<div class="row" style="gap:8px"><button class="btn primary grow" data-act="lookup-add" data-id="'+d[0]+'">Добавить к изучению</button>'+known+'</div>'
+    :w.s==="R"?'<button class="btn block" disabled>Уже выучено</button>'
+    :'<div class="row" style="gap:8px"><button class="btn grow" disabled>В изучении '+w.c+'/'+w.t+'</button>'+known+'</div>';
+  if(ui.note)addBtn='<div class="fb info">'+esc(ui.note)+'</div>'+addBtn;
   var h='<div class="stack"><button class="btn ghost" data-act="lookup-back">← Назад</button>';
   h+='<div class="panel">'+wordHead(d)+(LEVEL.get(d[0])?'<div style="margin-top:6px">'+lvTag(d[0])+' <span class="muted small">уровень</span></div>':'')+'<div class="label">Перевод</div><div class="ru">'+esc(d[3])+'</div>'+details(d)+'</div>';
   h+=addBtn+'</div>';
@@ -586,6 +589,8 @@ view.addEventListener("click",function(e){
   else if(a==="dict-add-cancel"){dict.arm=null;dictRefresh()}
   else if(a==="dict-add-yes"){addGroup(b.getAttribute("data-g"));dict.arm=null;dictRefresh()}
   else if(a==="lookup-add"){var aid=Number(b.getAttribute("data-id"));if(!S.words[aid]){S.words[aid]=newWord();save()}render()}
+  /* «Изучено» in the dictionary: straight to review like the new-word card (a word in learning moves there too) */
+  else if(a==="lookup-known"){var kid2=Number(b.getAttribute("data-id")),kw=S.words[kid2];if(!kw||kw.s!=="R"){S.words[kid2]=knownWord();save()}ui.note="«"+BYID.get(kid2)[1]+"» — в изученных, повторение "+STAGE_NAMES[0];render()}
 });
 view.addEventListener("input",function(e){
   if(e.target.id==="dq"){dict.q=e.target.value;dictRefresh();return}
