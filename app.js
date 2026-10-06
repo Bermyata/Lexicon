@@ -152,10 +152,16 @@ function nextNew(skip){
   for(var i=0;i<DATA.length;i++){var id=DATA[i][0];if(S.words[id]||(skip&&skip.indexOf(id)>=0))continue;var l=LEVEL.get(id);if((n[l]||0)<quota(l))return id}
   return null;
 }
-function variants(ru){return String(ru).split(";").map(function(x){return x.trim().toLowerCase()}).filter(Boolean)}
+/* a word with an everyday and an engineering sense reads «main (осн.); engineering (инж.)»; the marks are display only */
+function stripMarks(ru){return String(ru).replace(/\s*\((?:осн|инж)\.\)/g,"")}
+function variants(ru){return stripMarks(ru).split(";").map(function(x){return x.trim().toLowerCase()}).filter(Boolean)}
 function shareVariant(a,b){var va=variants(a),vb=variants(b);return va.some(function(x){return vb.indexOf(x)>=0})}
-/* «(осн.)» / «(инж.)» mark the main and the engineering sense inside the full translation; the short form drops them */
-function shortRu(ru){return String(ru).split(";")[0].replace(/\s*\((осн|инж)\.\)/g,"").trim()}
+/* short form for lists: the first part; a marked word shows both senses (main · engineering) */
+function shortRu(ru){
+  var s=String(ru);
+  if(s.indexOf("(осн.)")<0)return s.split(";")[0].trim();
+  return stripMarks(s).split(";").map(function(x){return x.trim()}).filter(Boolean).join(" · ");
+}
 /* exact to the minute below a day: rounding to whole hours made every fresh word read "4 ч" */
 function fmtDur(ms){
   var m=Math.ceil(ms/60000);if(m<1)return "меньше минуты";if(m<60)return m+" мин";
@@ -483,7 +489,7 @@ function dictSearch(q){
   var nq=norm(q).replace(/^(to|de|het) /,""),lq=q.trim().toLowerCase(),out=[];
   if(!nq&&!lq)return out;
   DATA.forEach(function(d){
-    var w=sortKey(d[1]),r=d[3].toLowerCase(),score=-1;
+    var w=sortKey(d[1]),r=stripMarks(d[3]).toLowerCase(),score=-1;
     if(nq&&w.indexOf(nq)===0)score=w===nq?0:1;else if(nq&&w.indexOf(nq)>0)score=2;else if(lq&&r.indexOf(lq)>=0)score=r.indexOf(lq)===0?3:4;
     if(score>=0&&lvOk(d[0]))out.push([score,w.length,d[0]]);
   });
