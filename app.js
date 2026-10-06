@@ -154,7 +154,8 @@ function nextNew(skip){
 }
 function variants(ru){return String(ru).split(";").map(function(x){return x.trim().toLowerCase()}).filter(Boolean)}
 function shareVariant(a,b){var va=variants(a),vb=variants(b);return va.some(function(x){return vb.indexOf(x)>=0})}
-function shortRu(ru){return String(ru).split(";")[0].trim()}
+/* «(осн.)» / «(инж.)» mark the main and the engineering sense inside the full translation; the short form drops them */
+function shortRu(ru){return String(ru).split(";")[0].replace(/\s*\((осн|инж)\.\)/g,"").trim()}
 /* exact to the minute below a day: rounding to whole hours made every fresh word read "4 ч" */
 function fmtDur(ms){
   var m=Math.ceil(ms/60000);if(m<1)return "меньше минуты";if(m<60)return m+" мин";
