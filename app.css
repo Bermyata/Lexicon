@@ -62,6 +62,10 @@ h3{font-family:var(--font-display);font-size:18px;margin:0}
 .opt .ipa{font-size:15px}
 .opt.ok{border-color:var(--ok);background:var(--ok-soft)}
 .opt.bad{border-color:var(--bad);background:var(--bad-soft)}
+.qtimer{height:6px;margin-top:14px;border-radius:99px;background:var(--surface2);overflow:hidden}
+.qtimer>i{display:block;height:100%;background:var(--accent);border-radius:99px;transform-origin:left;animation:qtime linear forwards}
+@keyframes qtime{from{transform:scaleX(1)}to{transform:scaleX(0)}}
+.qsizes{display:grid;grid-template-columns:1fr 1fr;gap:10px}
 .opt[disabled]{cursor:default}
 .field{width:100%;min-height:56px;padding:0 16px;border-radius:14px;border:1.5px solid var(--line);background:var(--surface);color:var(--ink);font:inherit;font-size:20px}
 .fb{border-radius:16px;padding:14px 16px;font-weight:600}

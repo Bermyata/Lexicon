@@ -36,6 +36,8 @@ function pruneStale(words){
   Object.keys(words).forEach(function(id){
     if(!BYID.has(Number(id))){var to=MERGED[id];if(to&&!words[to])words[to]=words[id];delete words[id];if(!to)return;id=String(to)}
     var w=words[id];if(w&&w.s==="L"){w.t=T_NEW;if(w.c>=STREAK)w.u=1}
+    /* quick review marker for words learned before it existed: the last normal repeat (due minus its interval) */
+    if(w&&w.s==="R"&&typeof w.q!=="number"){w.q=Math.min(Date.now(),(w.due||0)-INT[w.st||0]);w.qm=0}
   });
 }
 function normalize(o){
@@ -182,7 +184,9 @@ function speak(t){try{var u=new SpeechSynthesisUtterance(String(t).replace(/ \/ 
 function shuffle(a){for(var i=a.length-1;i>0;i--){var j=Math.random()*(i+1)|0,t=a[i];a[i]=a[j];a[j]=t}return a}
 function newWord(){return{s:"L",c:0,t:T_NEW,st:0,due:0,ok:0,bad:0}}
 /* «Изучено» on a new word: straight to review, first repeat after INT[0] like a word learned in the quiz */
-function knownWord(){return{s:"R",c:T_NEW,t:T_NEW,u:1,st:0,m:0,due:Date.now()+INT[0],ok:0,bad:0}}
+function knownWord(){return{s:"R",c:T_NEW,t:T_NEW,u:1,st:0,m:0,due:Date.now()+INT[0],q:Date.now(),qm:0,ok:0,bad:0}}
+/* two misses in a row (in either review) send a word back to learning; both review markers start over when it is learned again */
+function toLearning(w){w.s="L";w.c=0;w.u=0;w.m=0;w.t=T_NEW;w.st=0;w.due=0;delete w.q;delete w.qm}
 function flash(q){return q.flash?'<div class="fb ok">'+esc(q.flash)+'</div><div style="height:12px"></div>':""}
 
 /* ---------- pieces ---------- */
@@ -296,7 +300,8 @@ function renderHome(){
   if(!Ln.length&&room==null)h+='<p class="note" style="margin:0 0 12px">Слова можно добавлять и сами, по одному или целой темой, на вкладке «Словарь».</p>';
   h+='<button class="btn primary block" data-act="practice"'+(Ln.length||room!=null?"":" disabled")+'>Учить</button></div>';
   h+='<div class="panel card-task"><div class="meta"><div><h3>Повторение</h3><p class="note">'+(due.length?"Пора повторить, чтобы не забыть":(R.length?(next?"Ближайшее повторение через "+fmtDur(next-Date.now())+" ("+fmtWhen(next)+")"+(R.length>1?". Своё время у каждого слова — см. «Прогресс»":""):""):"Выученные слова появятся здесь"))+'</p></div><div class="big tick">'+due.length+'</div></div>';
-  h+='<button class="btn primary block" data-act="review"'+(due.length?"":" disabled")+'>Повторить</button></div>';
+  h+='<button class="btn primary block" data-act="review"'+(due.length?"":" disabled")+'>Повторить</button>';
+  h+='<button class="btn block" style="margin-top:10px" data-act="quick"'+(R.length?"":" disabled")+'>Быстрое повторение</button>'+(R.length?'<p class="note" style="margin:8px 0 0">Все выученные слова по кругу, перевод за '+Q_TIME/1000+' секунды, начиная с самых давних. Своё расписание, обычное повторение не меняет</p>':'')+'</div>';
   h+='</div>';
   view.innerHTML=h;
 }
@@ -373,17 +378,18 @@ function answer(correct,given,note){
   var q=ui.q,w=S.words[q.id];q.answered=true;q.correct=correct;q.given=given;q.note=note||"";ui.done++;
   if(correct){
     ui.ok++;w.ok++;
-    if(w.s==="L"){w.c++;if(w.c>=w.t){w.s="R";w.st=0;w.m=0;w.due=Date.now()+INT[0];q.grad=true}}
+    if(w.s==="L"){w.c++;if(w.c>=w.t){w.s="R";w.st=0;w.m=0;w.due=Date.now()+INT[0];w.q=Date.now();w.qm=0;q.grad=true}}
     else{w.m=0;w.st=Math.min(w.st+1,8);w.due=Date.now()+INT[w.st];q.next=INT[w.st]}
   }else{
     ui.bad++;w.bad++;
     if(w.s==="L"){if(w.c>=STREAK){w.c=STREAK;q.floor=true}else{q.reset=w.c>0;w.c=0}}
-    else{w.m=(w.m||0)+1;if(w.m>=REVIEW_MISSES){w.s="L";w.c=0;w.u=0;w.m=0;w.t=T_NEW;w.st=0;w.due=0;q.relapsed=true}else{w.st=0;w.due=Date.now()+INT[0];q.warned=true}}
+    else{w.m=(w.m||0)+1;if(w.m>=REVIEW_MISSES){toLearning(w);q.relapsed=true}else{w.st=0;w.due=Date.now()+INT[0];q.warned=true}}
   }
   ui.recent.push(q.id);ui.sinceNew++;save();render();
   if(correct)speak(BYID.get(q.id)[1]);
 }
 function renderQuiz(){
+  if(ui.kind==="quick"){renderQuick();return}
   var top='<div class="topbar"><button class="btn ghost" data-act="home">Завершить</button><span class="pill tick">верно '+ui.ok+' · ошибок '+ui.bad+'</span></div>';
   var q=ui.q;
   if(!q){
@@ -421,6 +427,65 @@ function renderQuiz(){
   h+='</div>';
   view.innerHTML=h;
   var ti=document.getElementById("typed");if(ti){ti.focus({preventScroll:true})}
+}
+
+/* ---------- quick review: its own pass over all learned words, the longest unrepeated first ----------
+   Each learned word keeps q (time of the last quick repeat) and qm (quick misses in a row) apart from the normal schedule (due, st, m). */
+var Q_TIME=4000,Q_LIVES=3,Q_SIZES=[50,100,150,200];
+function quickList(){return reviewList().sort(function(a,b){return (S.words[a].q||0)-(S.words[b].q||0)||a-b})}
+function quickClear(){if(ui.timer){clearTimeout(ui.timer);ui.timer=null}if(ui.adv){clearTimeout(ui.adv);ui.adv=null}}
+function startQuick(n){ui={mode:"quiz",kind:"quick",phase:"run",list:quickList().slice(0,n),pos:0,ok:0,bad:0,relapsed:[],q:null,timer:null,adv:null};quickNext()}
+function quickNext(){
+  quickClear();
+  while(ui.pos<ui.list.length&&!(S.words[ui.list[ui.pos]]&&S.words[ui.list[ui.pos]].s==="R"))ui.pos++;
+  if(ui.bad>=Q_LIVES||ui.pos>=ui.list.length){ui.phase="done";ui.q=null;render();window.scrollTo(0,0);return}
+  var id=ui.list[ui.pos++];ui.q={id:id,opts:buildOpts(id),answered:false,t0:Date.now(),prev:!!S.words[id].qm};render();quickArm();window.scrollTo(0,0);
+}
+/* no answer in Q_TIME counts as a miss */
+function quickArm(){var q=ui.q;if(!q||q.answered)return;ui.timer=setTimeout(function(){if(ui.q===q&&!q.answered)quickAnswer(null)},Math.max(0,Q_TIME-(Date.now()-q.t0)))}
+function quickAnswer(given){
+  var q=ui.q,w=S.words[q.id],ok=given===q.id;quickClear();
+  q.answered=true;q.given=given;q.correct=ok;w.q=Date.now();
+  if(ok){ui.ok++;w.ok++;w.qm=0}
+  else{ui.bad++;w.bad++;q.timeout=given==null;w.qm=(w.qm||0)+1;if(w.qm>=REVIEW_MISSES){toLearning(w);q.relapsed=true;ui.relapsed.push(q.id)}else q.warned=true}
+  save();render();
+  ui.adv=setTimeout(quickNext,ok?700:2500);
+}
+function renderQuick(){
+  var h;
+  if(ui.phase==="pick"){
+    var n=reviewList().length;
+    h='<div class="topbar"><button class="btn ghost" data-act="home">Назад</button></div><div class="panel stack"><h2>Быстрое повторение</h2>';
+    h+='<p class="small" style="margin:0">Слово и 4 варианта перевода, на ответ '+Q_TIME/1000+' секунды. Три ошибки — и цикл заканчивается. Слова идут от тех, что дольше всего не повторяли в этом режиме; две ошибки подряд на одном слове возвращают его в изучение. Расписание обычного повторения не меняется.</p>';
+    h+='<p class="muted small" style="margin:0">Выучено слов: '+n+'. Сколько повторить?</p><div class="qsizes">';
+    Q_SIZES.forEach(function(k){h+='<button class="btn" data-act="quick-go" data-n="'+k+'"'+(k>n?" disabled":"")+'>'+k+'</button>'});
+    if(n<Q_SIZES[Q_SIZES.length-1]&&Q_SIZES.indexOf(n)<0)h+='<button class="btn primary" style="grid-column:1/-1" data-act="quick-go" data-n="'+n+'">Все ('+n+')</button>';
+    view.innerHTML=h+'</div></div>';return;
+  }
+  if(ui.phase==="done"){
+    h='<div class="panel stack"><h2>Быстрое повторение окончено</h2><p class="lead" style="margin:0">'+(ui.bad>=Q_LIVES?"Три ошибки — цикл остановлен.":"Все слова цикла пройдены.")+' Верно: '+ui.ok+', ошибок: '+ui.bad+'.</p>';
+    if(ui.relapsed.length)h+='<div class="label" style="margin-top:0">Вернулись в изучение</div><p style="margin:0">'+ui.relapsed.map(function(id){var d=BYID.get(id);return '<b>'+esc(d[1])+'</b> <span class="muted">— '+esc(shortRu(d[3]))+'</span>'}).join("<br>")+'</p>';
+    h+='<button class="btn primary block" data-act="quick">Ещё цикл</button><button class="btn block" data-act="home">На главную</button></div>';
+    view.innerHTML=h;return;
+  }
+  var q=ui.q,d=BYID.get(q.id);
+  h='<div class="topbar"><button class="btn ghost" data-act="home">Завершить</button><span class="pill tick" style="white-space:nowrap">'+ui.pos+'/'+ui.list.length+' · ошибок '+ui.bad+'/'+Q_LIVES+'</span></div><div class="stack">';
+  h+='<div class="panel prompt"><div class="small muted" style="margin-bottom:6px">Быстрое повторение'+(q.prev?" · была ошибка":"")+'</div>'+wordHead(d);
+  if(!q.answered)h+='<div class="qtimer" aria-hidden="true"><i style="animation-duration:'+Q_TIME+'ms;animation-delay:-'+Math.min(Q_TIME,Date.now()-q.t0)+'ms"></i></div>';
+  h+='</div><div class="opts">';
+  q.opts.forEach(function(id){
+    var o=BYID.get(id),cls="opt",dis="";
+    if(q.answered){dis=" disabled";if(id===q.id)cls+=" ok";else if(id===q.given)cls+=" bad"}
+    h+='<button class="'+cls+'" data-act="qpick" data-id="'+id+'"'+dis+'>'+esc(o[3])+'</button>';
+  });
+  h+='</div>';
+  if(q.answered){
+    h+='<div class="fb '+(q.correct?"ok":"bad")+'">'+(q.correct?"Верно":(q.timeout?"Время вышло":"Неверно")+": «"+esc(d[1])+"» — "+esc(shortRu(d[3])))
+      +(q.warned?". Первая ошибка подряд в быстром повторении: при следующей слово вернётся в изучение":"")
+      +(q.relapsed?". Вторая ошибка подряд: слово вернулось в изучение, нужно "+T_NEW+" верных ответов":"")+'</div>';
+    h+='<button class="btn primary block" data-act="qnext">Дальше</button>';
+  }
+  view.innerHTML=h+'</div>';
 }
 
 /* ---------- stats ---------- */
@@ -581,12 +646,16 @@ view.addEventListener("click",function(e){
   else if(a==="forgot"){ui.err="";ui.info="Пока восстановление по почте не настроено: напишите администратору приложения, он сбросит пароль.";render()}
   else if(a==="google")googleLogin();
   else if(a==="signout")signOut();
-  else if(a==="home"){ui={mode:"home"};render()}
+  else if(a==="home"){quickClear();ui={mode:"home"};render()}
   else if(a==="learn-inline"){var iid=ui.q.intro;if(!S.words[iid]){S.words[iid]=newWord();save()}nextQ()}
   else if(a==="learn-skip"){var sid=ui.q.intro;ui.skip.push(sid);ui.sinceNew=NEW_EVERY;nextQ();if(ui.q)ui.q.flash="«"+BYID.get(sid)[1]+"» пропущено — вернётся в следующей сессии";render()}
   else if(a==="learn-known"){var kid=ui.q.intro;if(!S.words[kid]){S.words[kid]=knownWord();save()}ui.sinceNew=NEW_EVERY;nextQ();if(ui.q)ui.q.flash="«"+BYID.get(kid)[1]+"» — в изученных, повторение "+STAGE_NAMES[0];render()}
   else if(a==="practice")startQuiz("learn");
   else if(a==="review")startQuiz("review");
+  else if(a==="quick"){quickClear();ui={mode:"quiz",kind:"quick",phase:"pick"};render();window.scrollTo(0,0)}
+  else if(a==="quick-go")startQuick(Number(b.getAttribute("data-n")));
+  else if(a==="qpick"){if(ui.q&&!ui.q.answered)quickAnswer(Number(b.getAttribute("data-id")))}
+  else if(a==="qnext"){if(ui.q&&ui.q.answered)quickNext()}
   else if(a==="next"){nextQ();window.scrollTo(0,0)}
   else if(a==="pick"){var id=Number(b.getAttribute("data-id"));answer(id===ui.q.id,id)}
   else if(a==="check"){doCheck()}
@@ -632,6 +701,7 @@ function doCheck(){
 }
 document.addEventListener("keydown",function(e){
   if(e.key!=="Enter"||ui.mode!=="quiz"||!ui.q)return;
+  if(ui.kind==="quick"){if(ui.q.answered)quickNext();return}
   if(ui.q.answered){nextQ();window.scrollTo(0,0)}else if(ui.q.type==="type"){doCheck()}
 });
 
@@ -646,6 +716,9 @@ function checkVersion(){
   }).catch(function(){});
 }
 document.addEventListener("visibilitychange",function(){
+  if(ui.mode==="quiz"&&ui.kind==="quick"&&ui.q&&!ui.q.answered){
+    if(document.visibilityState!=="visible"){quickClear()}else{ui.q.t0=Date.now();render();quickArm()}
+  }
   if(document.visibilityState!=="visible")return;
   checkVersion();
   if(lang&&S&&ui.mode!=="quiz")syncFromCloud();
