@@ -5,10 +5,12 @@
 var SB_URL="https://gqqdbhgusdjryrbunkhj.supabase.co";
 var SB_KEY="sb_publishable_uoPijcsdsorwLxDvNDHiPw_WVgGe-ni";
 var LANGS={
-  en:{name:"Английский",native:"English",flag:"🇬🇧",tts:"en-US",adj:"английское",adv:"по-английски",loc:"на английском",articles:/^(to|a|an|the) /},
-  nl:{name:"Нидерландский",native:"Nederlands",flag:"🇳🇱",tts:"nl-NL",adj:"нидерландское",adv:"по-нидерландски",loc:"на нидерландском",articles:null}
+  en:{name:"Английский",native:"English",flag:"🇬🇧",tts:"en-US",adj:"английское",adv:"по-английски",loc:"на английском",articles:/^(to|a|an|the) /,lead:/^to /},
+  nl:{name:"Нидерландский",native:"Nederlands",flag:"🇳🇱",tts:"nl-NL",adj:"нидерландское",adv:"по-нидерландски",loc:"на нидерландском",articles:null,lead:/^(de|het|een) /},
+  fr:{name:"Французский",native:"Français",flag:"🇫🇷",tts:"fr-FR",adj:"французское",adv:"по-французски",loc:"на французском",articles:null,lead:/^(le |la |les |l'|se |s')/}
 };
-var LANG_ORDER=["en","nl"];
+/* articles: leading words the typed answer may leave out; lead: leading words ignored when sorting and searching the dictionary */
+var LANG_ORDER=["en","nl","fr"];
 var H=3600e3;
 var INT=[4,12,24,144,288,576,1152,2304,4320].map(function(h){return h*H});
 var STAGE_NAMES=["через 4 ч","через 12 ч","через 1 день","через 6 дней","через 12 дней","через 24 дня","через 48 дней","через 96 дней","через 180 дней"];
@@ -207,7 +209,7 @@ function details(d){
 }
 function dots(w){var h='<div class="dots" aria-label="Верных ответов '+w.c+' из '+w.t+'">';for(var i=0;i<w.t;i++)h+='<i class="'+(i<w.c?"on":"")+'"></i>';return h+'</div>'}
 function langSwitch(){
-  return '<div class="seg" role="group" aria-label="Язык">'+LANG_ORDER.map(function(c){var x=LANGS[c];return '<button data-act="lang" data-lang="'+c+'" aria-pressed="'+(c===lang)+'">'+x.flag+' '+esc(x.native)+'</button>'}).join("")+'</div>';
+  return '<div class="seg" role="group" aria-label="Язык">'+LANG_ORDER.map(function(c){var x=LANGS[c];return '<button data-act="lang" data-lang="'+c+'" aria-pressed="'+(c===lang)+'"><span aria-hidden="true">'+x.flag+'</span><span>'+esc(x.native)+'</span></button>'}).join("")+'</div>';
 }
 
 /* ---------- auth ---------- */
@@ -334,7 +336,19 @@ function nextQ(){
   if(t!=="type")q.opts=buildOpts(id);
   ui.q=q;render();
 }
-function norm(s){return String(s).normalize("NFD").replace(/[̀-ͯ]/g,"").toLowerCase().replace(/[’]/g,"'").replace(/[^a-z0-9' -]/g," ").replace(/\s+/g," ").trim()}
+function norm(s){return String(s).normalize("NFD").replace(/[̀-ͯ]/g,"").toLowerCase().replace(/[’]/g,"'").replace(/œ/g,"oe").replace(/æ/g,"ae").replace(/[^a-z0-9' -]/g," ").replace(/\s+/g," ").trim()}
+/* like norm but keeps accents: «ecole» for «l'école» counts, with a note on the spelling */
+function normA(s){return String(s).normalize("NFC").toLowerCase().replace(/[’]/g,"'").replace(/œ/g,"oe").replace(/æ/g,"ae").replace(/[^a-z0-9à-ÿ' -]/g," ").replace(/\s+/g," ").trim()}
+function accentNote(word,val){
+  var f=word.split(" / ").filter(function(w){return norm(w)===norm(val)})[0];
+  return f&&normA(f)!==normA(val)?"засчитано, но пишется «"+f+"»":"";
+}
+/* typed without the article or se/s' that the card needs ("chat" for "le chat"): still wrong, but say what was missing */
+function leadNote(word,val){
+  if(L.articles)return "";
+  var v=norm(val),f=word.split(" / ").filter(function(w){var m=norm(w).match(L.lead);return m&&norm(w).slice(m[0].length)===v})[0];
+  return f?"нужно вместе с «"+norm(f).match(L.lead)[0].trim()+"»: «"+f+"»":"";
+}
 function lev(a,b){var m=a.length,n=b.length,p=[],i,j;for(j=0;j<=n;j++)p[j]=j;for(i=1;i<=m;i++){var prev=p[0];p[0]=i;for(j=1;j<=n;j++){var t=p[j];p[j]=Math.min(p[j]+1,p[j-1]+1,prev+(a[i-1]===b[j-1]?0:1));prev=t}}return p[n]}
 function joined(x){return x.replace(/^(to) /,"").replace(/[\s-]/g,"")}
 /* a card can hold two forms of one word ("ze / zij"): either one counts */
@@ -459,7 +473,7 @@ function renderIpa(){
 
 /* ---------- dictionary: every word of the language, grouped by topic ---------- */
 var DICT_PAGE=60;
-function sortKey(w){return norm(w).replace(/^(to|de|het|een) /,"")}
+function sortKey(w){return norm(w).replace(L.lead,"")}
 /* level filter: an empty list means every level; remembered per language on this device */
 function loadLv(){try{var v=JSON.parse(lsGet("lexicon.lv."+lang)||"[]");return Array.isArray(v)?v.filter(function(l){return LEVELS.indexOf(l)>=0}):[]}catch(e){return []}}
 function lvOk(id){return !dict.lv.length||dict.lv.indexOf(LEVEL.get(id))>=0}
@@ -486,7 +500,7 @@ function addGroup(gid){
   if(n){dict.added={g:gid,n:n};save()}
 }
 function dictSearch(q){
-  var nq=norm(q).replace(/^(to|de|het) /,""),lq=q.trim().toLowerCase(),out=[];
+  var nq=norm(q).replace(L.lead,""),lq=q.trim().toLowerCase(),out=[];
   if(!nq&&!lq)return out;
   DATA.forEach(function(d){
     var w=sortKey(d[1]),r=stripMarks(d[3]).toLowerCase(),score=-1;
@@ -602,7 +616,7 @@ view.addEventListener("click",function(e){
 view.addEventListener("input",function(e){
   if(e.target.id==="dq"){dict.q=e.target.value;dictRefresh();return}
   if(e.target.id!=="typed"||ui.mode!=="quiz"||!ui.q||ui.q.answered||ui.q.type!=="type")return;
-  var d=BYID.get(ui.q.id);var tv=norm(e.target.value);if(d[1].split(" / ").some(function(w){return norm(w)===tv}))answer(true,e.target.value,"");
+  var d=BYID.get(ui.q.id);var tv=norm(e.target.value);if(d[1].split(" / ").some(function(w){return norm(w)===tv}))answer(true,e.target.value,accentNote(d[1],e.target.value));
 });
 function doCheck(){
   var ti=document.getElementById("typed");if(!ti||!ti.value.trim())return;
@@ -614,7 +628,7 @@ function doCheck(){
     if(other){answer(false,ti.value,"«"+other[1]+"» — другое слово ("+shortRu(other[3])+"), здесь нужно «"+d[1]+"»");return}
     answer(true,ti.value,"засчитано, но пишется «"+d[1]+"»");return;
   }
-  answer(r>0,ti.value,r===2?"почти, опечатка засчитана":(r===0?"вы написали: "+ti.value:""));
+  answer(r>0,ti.value,r===2?"почти, опечатка засчитана":(r===0?leadNote(d[1],ti.value)||"вы написали: "+ti.value:accentNote(d[1],ti.value)));
 }
 document.addEventListener("keydown",function(e){
   if(e.key!=="Enter"||ui.mode!=="quiz"||!ui.q)return;

@@ -95,7 +95,9 @@ textarea.field{padding:10px 12px;min-height:110px;font-size:13px;font-family:ui-
 #app{padding-top:calc(12px + env(safe-area-inset-top,0px))}
 .brand small{font-family:var(--font-body);font-weight:600;font-size:13px;color:var(--muted);margin-left:6px}
 .seg{display:flex;gap:4px;padding:4px;background:var(--surface2);border:1px solid var(--line);border-radius:14px}
-.seg button{flex:1;min-height:44px;border:0;border-radius:10px;background:transparent;font-weight:600;color:var(--muted)}
+.seg button{flex:1;min-width:0;min-height:44px;padding:4px 2px;display:flex;flex-direction:column;align-items:center;justify-content:center;gap:1px;line-height:1.15;border:0;border-radius:10px;background:transparent;font-weight:600;font-size:13px;color:var(--muted)}
+.seg button span{max-width:100%;white-space:nowrap;overflow:hidden;text-overflow:ellipsis}
+@media (max-width:340px){.seg button{font-size:12px}}
 .seg button[aria-pressed="true"]{background:var(--surface);color:var(--ink);box-shadow:var(--shadow)}
 .langcard{display:flex;align-items:center;gap:14px;width:100%;text-align:left;padding:18px 16px;border-radius:16px;border:1.5px solid var(--line);background:var(--surface);box-shadow:var(--shadow)}
 .langcard .flag{font-size:34px;line-height:1}
