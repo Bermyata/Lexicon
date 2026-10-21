@@ -40,6 +40,7 @@ Word trainer (Russian speakers learning English, Dutch and French). Installed on
 - Auth: email + password (email confirmation off), Google (optional).
 - Table `public.progress (user_id, lang, data jsonb, updated_at)`, PK `(user_id, lang)`, RLS: owner only.
 - The publishable key in `app.js` is public by design; never commit a secret/service_role key.
+- Since 2026-10-30 Supabase no longer grants Data API access to new tables in `public` automatically (existing `progress` keeps its grants). A new table, or `progress` recreated in a new project, needs in the same migration: `grant select, insert, update, delete on public.<table> to authenticated;` and the same `to service_role;` — no grant to `anon` (sign-in is required) — plus RLS with owner-only policies like `progress`. Without the grant supabase-js gets "permission denied".
 
 ## Learning rules (app.js)
 6 correct answers to learn; a mistake below 3 resets to 0, at/after 3 drops back to 3.
